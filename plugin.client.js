@@ -62,12 +62,12 @@ function pct(score) {
 
 const CSS = [
   /* -- launcher ---------------------------------------------------------- */
-  '.rsc-launch{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;padding:8px 10px;border-radius:10px;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#bbb);cursor:pointer;font:inherit;font-size:13px;text-align:left}',
-  '.rsc-launch:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}',
+  '.rsc-launch{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;align-items:center;gap:8px;padding:9px 15px;border-radius:999px;border:1px solid color-mix(in srgb,var(--dsw-alias-label-primary,#fff) 12%,transparent);background:color-mix(in srgb,var(--dsw-alias-bg-primary,#1e1e22) 80%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:0 8px 26px rgba(0,0,0,.3);color:var(--dsw-alias-label-secondary,#bbb);cursor:pointer;font:inherit;font-size:12.5px}',
+  '.rsc-launch:hover{color:var(--dsw-alias-label-primary);border-color:color-mix(in srgb,var(--dsw-alias-label-primary,#fff) 26%,transparent)}',
   '.rsc-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-tertiary)}',
+  '.rsc-launch[data-live]{border-color:var(--dsw-alias-accent-primary,#4b8dff)}',
   '.rsc-launch[data-live] .rsc-dot{background:var(--dsw-alias-accent-primary,#4b8dff);animation:rsc-pulse 1.4s ease-in-out infinite}',
   '@keyframes rsc-pulse{0%,100%{opacity:1}50%{opacity:.35}}',
-  '.rsc-launch-mini{position:fixed;right:18px;bottom:18px;z-index:60;width:auto;border-radius:999px;border:1px solid color-mix(in srgb,var(--dsw-alias-label-primary,#fff) 12%,transparent);background:color-mix(in srgb,var(--dsw-alias-bg-primary,#1e1e22) 80%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);padding:9px 15px}',
 
   /* -- full-frame surface ------------------------------------------------ */
   '.rsc-full{position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;background:color-mix(in srgb,var(--dsw-alias-bg-primary,#16161a) 94%,transparent);-webkit-backdrop-filter:blur(30px) saturate(1.4);backdrop-filter:blur(30px) saturate(1.4);color:var(--dsw-alias-label-primary);font-size:13px;animation:rsc-in 260ms cubic-bezier(.32,.72,0,1) both}',
@@ -596,12 +596,12 @@ return {
       return live;
     }
 
-    function Launcher(props) {
+    function Launcher() {
       const open = useOpen();
       const live = useLive(open);
       return React.createElement('button', {
         type: 'button',
-        className: 'rsc-launch' + (props.mini ? ' rsc-launch-mini' : ''),
+        className: 'rsc-launch',
         'data-live': live || undefined,
         onClick: function () { openStore.set(!open); },
       },
@@ -610,38 +610,18 @@ return {
       );
     }
 
-    function FullSurface() {
+    function Surface() {
       const open = useOpen();
-      if (!open) return null;
-      return React.createElement(ScoutView, { onClose: function () { openStore.set(false); } });
+      return React.createElement(React.Fragment, null,
+        React.createElement(Launcher),
+        open ? React.createElement(ScoutView, { onClose: function () { openStore.set(false); } }) : null
+      );
     }
 
-    // The full view rides the frame-wide overlay layer; the launcher prefers a
-    // real sidebar entry and falls back to a floating pill if that seat is
-    // unavailable in this harness build.
+    // Both the launcher and the console live on the frame-wide overlay layer:
+    // it is the one root-scoped seat, so a single entry cannot half-register.
     slots.inject('shell.overlay', function () {
-      return slots.register({ name: 'shell.overlay', id: 'rollout-scout-view', order: 120 }, FullSurface);
+      return slots.register({ name: 'shell.overlay', id: 'rollout-scout', order: 120 }, Surface);
     });
-
-    let sidebarSeated = false;
-    try {
-      slots.inject('sidebar.footer.action', function () {
-        sidebarSeated = true;
-        return slots.register(
-          { name: 'sidebar.footer.action', id: 'rollout-scout', order: 120, label: function () { return t('launcher'); } },
-          Launcher
-        );
-      });
-    } catch (e) {
-      sidebarSeated = false;
-    }
-    if (!sidebarSeated) {
-      slots.inject('shell.overlay', function () {
-        return slots.register(
-          { name: 'shell.overlay', id: 'rollout-scout-launcher', order: 121 },
-          function () { return React.createElement(Launcher, { mini: true }); }
-        );
-      });
-    }
   }
 };
