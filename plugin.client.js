@@ -201,7 +201,10 @@ return {
         forceStopHint: 'Stop launching and abort every conversation still in flight.',
         discardChinese: 'Discard when the chain-of-thought is mostly Chinese (80%+)',
         chineseCot: 'Chinese CoT',
-        scoringHint: 'A paragraph opening with “I’ll” is decisive for the rollout model; “Let me”, or a first paragraph already speaking as “we” / “we need” / “we will”, is decisive against. Openings are scored as soon as 48 characters have arrived. A probe about to be discarded waits 5 seconds with a countdown — Keep pins it so you can read the chain-of-thought, then Discard or Save.',
+        scoringHint: '“Let me” opening a paragraph is decisive against. “I’ll” opening the whole chain-of-thought is decisive for. “We need” at the start is only a negative opening — the summariser often restates the task that way, then writes I’ll / I’m in even paragraphs with pauses between bursts. A probe about to be discarded waits 5 seconds — Keep pins it so you can read the chain-of-thought, then Discard or Save.',
+        shapeRegular: 'even paragraphs',
+        shapeBurst: '{count} pauses',
+        reason_shape: 'summariser shape',
         reason_decisive: 'decisive opening',
         reason_score: 'opening score',
         reason_window: 'no positive opening',
@@ -281,7 +284,10 @@ return {
         forceStopHint: '停止发起，并中止所有进行中的会话。',
         discardChinese: '思维链以中文为主（80% 以上）时丢弃',
         chineseCot: '中文思维链',
-        scoringHint: '段落以「I’ll」开头即判定为灰度模型；以「Let me」开头，或第一段已经在说「we / we need / we will」，即判定为旧模型。开头写满 48 个字符就会打分。即将丢弃的探测会倒计时 5 秒，点「保留」可钉住继续看思维链，然后再选丢弃或保存。',
+        scoringHint: '段落以「Let me」开头即判定为旧模型；整条思维链以「I’ll」开头即判定为灰度。开头的「We need」只记负分——总结模型常这样复述任务，随后用规整的 I’ll / I’m 段落、一阵一阵地输出。即将丢弃会倒计时 5 秒，点「保留」可钉住再看。',
+        shapeRegular: '规整段落',
+        shapeBurst: '{count} 次停顿',
+        reason_shape: '总结链形态',
         reason_decisive: '决定性开头',
         reason_score: '开头评分',
         reason_window: '无正向开头',
@@ -453,6 +459,8 @@ return {
           React.createElement('span', { className: 'rsc-chip' }, t('paragraphs', { count: a.paragraphs || 0 })),
           a.reason ? React.createElement('span', { className: 'rsc-chip' }, t('reason_' + a.reason)) : null,
           a.chinese ? React.createElement('span', { className: 'rsc-chip', 'data-sign': 'neg' }, t('chineseCot')) : null,
+          a.regular ? React.createElement('span', { className: 'rsc-chip', 'data-sign': 'pos' }, t('shapeRegular')) : null,
+          a.pauses ? React.createElement('span', { className: 'rsc-chip', 'data-sign': 'pos' }, t('shapeBurst', { count: a.pauses })) : null,
           hitKeys.length === 0 && !a.chinese
             ? React.createElement('span', { className: 'rsc-chip' }, t('evidenceNone'))
             : hitKeys.map(function (k) {

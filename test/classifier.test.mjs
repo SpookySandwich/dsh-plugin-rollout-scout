@@ -145,6 +145,19 @@ For the control period and integration step, I'm using 5 ms and 1 ms respectivel
 
 Now I'm setting up the UI layout with a top bar for mode selection and status, a left panel for simulation. I'm keeping the height and width sensible for 1080p and 4K displays with responsive CSS. Let me start writing the file in two parts, beginning with the physics core and self-tests, then running the Node tests.`;
 
+// Observed summariser CoT: starts "We need to build…" then even I'll/I'm
+// paragraphs. Must keep — that opening we is the summariser restating the
+// task, not the old model's voice.
+const weNeedThenIll = `We need to build a single-page HTML demo of a black hole with physically accurate ray tracing using the Schwarzschild metric to simulate gravitational lensing around the event horizon.
+
+I'll integrate the geodesic equation using RK4 steps, checking at each step whether the ray crosses the disk, reaches the horizon, or escapes to the sky.
+
+Now I'm turning to the disk emission model, using the standard Shakura-Sunyaev temperature profile for a thin Keplerian accretion disk.
+
+For the observed redshift, I need to account for both gravitational and Doppler effects in the Schwarzschild geometry.
+
+Now I'm checking the formula g = sqrt(1 - 3M/r) / (1 - Ω * b_axial) where b_axial is the normalized axial angular momentum.`;
+
 const cases = [
   ['LABELLED new model', newModel, 'keep'],
   ['LABELLED old model', oldModel, 'discard'],
@@ -158,6 +171,7 @@ const cases = [
   ['finished with no I/we signal', blandFinished, 'discard'],
   ['I-will first, Let me later', illFirstThenLetMe, 'discard'],
   ['new model with Let me only in paragraph body', newModelLetMeInBody, 'keep'],
+  ['rollout CoT that opens We need then I-voice', weNeedThenIll, 'keep'],
 ];
 
 let failed = 0;
@@ -173,13 +187,13 @@ for (const [name, text, expected] of cases) {
   );
 }
 const liveBlob = classify(weNeedBlob, false);
-if (liveBlob.paragraphs !== 1 || liveBlob.decisive !== 'old' || liveBlob.negative < 1) {
+if (liveBlob.paragraphs !== 1 || liveBlob.negative < 1 || liveBlob.decisive === 'old') {
   failed += 1;
   console.log(
-    `FAIL  streaming blob  paras=${liveBlob.paragraphs} decisive=${liveBlob.decisive} -${liveBlob.negative}  want paras=1 decisive=old negative>=1`,
+    `FAIL  streaming blob  paras=${liveBlob.paragraphs} decisive=${liveBlob.decisive} -${liveBlob.negative}  want paras=1 negative>=1 not-decisive-old`,
   );
 } else {
-  console.log('PASS  streaming We-need blob is classified before the turn ends');
+  console.log('PASS  streaming We-need blob is scored negative without an instant kill');
 }
 
 const shortLive = classify('We need', false);
@@ -198,6 +212,17 @@ for (const [phrase, hit] of Object.entries(weHits)) {
   } else {
     console.log(`PASS  hit "${phrase}" ×${hit.count} sign=neg`);
   }
+}
+
+const summarised = classify(weNeedThenIll, true);
+if (summarised.decisive === 'old') {
+  failed += 1;
+  console.log('FAIL  summariser CoT starting We need was decisive-old');
+} else if (verdict(weNeedThenIll) !== 'keep') {
+  failed += 1;
+  console.log(`FAIL  summariser CoT verdict=${verdict(weNeedThenIll)} want keep score=${summarised.score.toFixed(2)} +${summarised.positive} -${summarised.negative} regular=${summarised.regular}`);
+} else {
+  console.log(`PASS  summariser CoT We-need opener is keep (regular=${summarised.regular} score=${summarised.score.toFixed(2)})`);
 }
 
 console.log(`\n${cases.length - failed}/${cases.length} passed`);
