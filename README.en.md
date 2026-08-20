@@ -5,6 +5,7 @@ English | [中文](./README.md)
 A rollout-model fisher for DeepSeek Harness. When the provider does a limited rollout of a stronger conversation model, it may only surface in random new sessions. This plugin launches a batch of short probe conversations concurrently, reads their chain-of-thought **live**, and judges each by phrasing:
 
 - Strong old-model tells: **"Let me"** and **"We need"**, counted at **double weight**.
+- A **Chinese chain-of-thought** is discarded on sight, whatever the score (toggle, on by default).
 - Rollout tells: **"I'm"**, **"I need"**, **"For"**.
 
 ### Confidence score
@@ -32,9 +33,9 @@ Below `discard below` (default 0.35) the turn is **cancelled mid-thought and dis
 
 A "Rollout Scout" entry sits at the bottom of the sidebar and opens a **full-screen console**:
 
-- Left column: **probe prompt**, **model** (default V4-Pro / High), **concurrency**, **max probes**, **folder**, plus the scoring thresholds and toggles (`stop after first catch`, `auto-delete old-model probes`).
-- Right column: headline stats (launched / live / kept / discarded / best score) above the probe queue — each probe shows a **score meter** with both threshold marks, the phrases it matched (colour-coded for and against), status, and a reasoning preview; click any probe to open that conversation.
-- **Start / Stop / Clear finished.** After Stop, in-flight probes run to their own verdict; only new launches cease.
+- Left column: **probe prompt**, **model** (default V4-Pro / High), **concurrency**, **folder**, plus the scoring thresholds and toggles (`stop after first catch`, `discard Chinese chain-of-thought`, `auto-delete old-model probes`). Probing runs until you stop it — there is no probe cap.
+- Right column: headline stats (launched / live / kept / discarded / best score) above the probe queue. The queue is **ranked by confidence**, highest first, and rows **animate to their new position** as scores move. Discarded probes **leave the queue** (they stay in the Discarded count). Each row shows a **score meter** with both threshold marks, the phrases it matched (colour-coded for and against), status, and a reasoning preview; **click a row to open that conversation**.
+- **Start** becomes **Stop** while running: Stop halts new launches and lets in-flight probes reach their own verdict. **Force stop** additionally aborts every conversation still in flight. **Clear finished** empties the history.
 
 The interface follows DSH's display language (English / 中文).
 

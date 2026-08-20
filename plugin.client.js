@@ -53,6 +53,7 @@ const STATUS_TONE = {
   discarding: 'bad',
   discarded: 'bad',
   finished: 'neutral',
+  stopped: 'neutral',
   error: 'bad',
 };
 
@@ -107,7 +108,8 @@ const CSS = [
   '.rsc-stat-v{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}',
   '.rsc-stat-k{font-size:11px;color:var(--dsw-alias-label-tertiary);margin-top:1px}',
   '.rsc-list{display:flex;flex-direction:column;gap:8px}',
-  '.rsc-item{padding:11px 13px;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 8%,transparent);border:1px solid transparent}',
+  '@keyframes rsc-row-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}',
+  '.rsc-item{animation:rsc-row-in 300ms cubic-bezier(.32,.72,0,1) both;padding:11px 13px;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 8%,transparent);border:1px solid transparent}',
   '.rsc-item[data-tone=good]{border-color:color-mix(in srgb,#3fbf6f 45%,transparent)}',
   '.rsc-item[data-tone=bad]{opacity:.72}',
   '.rsc-item[data-click]{cursor:pointer}',
@@ -166,7 +168,10 @@ return {
         discardBelow: 'Discard below',
         keepAbove: 'Keep above',
         minEvidence: 'Min. evidence',
-        maxAttempts: 'Max probes',
+        forceStop: 'Force stop',
+        forceStopHint: 'Stop launching and abort every conversation still in flight.',
+        discardChinese: 'Discard Chinese chain-of-thought on sight',
+        chineseCot: 'Chinese CoT',
         scoringHint: 'Score is the share of weighted evidence favouring the rollout model. "Let me" and "We need" count double against it. Neither verdict fires until minimum evidence accumulates, so one stray phrase cannot decide.',
         stopAfterHit: 'Stop launching after the first catch',
         autoDelete: 'Delete old-model probes from disk',
@@ -182,7 +187,7 @@ return {
         running: 'Scouting — {active} live, {launched} launched',
         idle: 'Idle',
         noteHit: 'Caught one. Launching paused.',
-        noteMax: 'Probe cap reached.',
+        noteForceStopped: 'Force stopped. Every probe in flight was aborted.',
         noteStopped: 'Stopped. Live probes will finish on their own.',
         probe: 'Probe {id}',
         confidence: 'rollout confidence',
@@ -191,6 +196,8 @@ return {
         deleted: 'deleted',
         openSession: 'Click to open this conversation',
         empty: 'No probes yet. Set a prompt and press Start.',
+        emptyAllDiscarded: 'All {count} probes so far were discarded. Still fishing.',
+        status_stopped: 'stopped',
         verdict_rollout: 'ROLLOUT',
         verdict_old: 'old model',
         verdict_unknown: 'inconclusive',
@@ -218,7 +225,10 @@ return {
         discardBelow: '低于此分即丢弃',
         keepAbove: '高于此分即保留',
         minEvidence: '最少证据量',
-        maxAttempts: '最大探测数',
+        forceStop: '强制停止',
+        forceStopHint: '停止发起，并中止所有进行中的会话。',
+        discardChinese: '思维链为中文时立即丢弃',
+        chineseCot: '中文思维链',
         scoringHint: '分数表示加权证据中支持「灰度模型」的比例。「Let me」与「We need」按双倍计入反方。证据量不足时不作判定，避免被个别词误导。',
         stopAfterHit: '命中一次后停止发起新探测',
         autoDelete: '从磁盘删除判为旧模型的会话',
@@ -234,7 +244,7 @@ return {
         running: '侦察中 — {active} 进行中，已发起 {launched}',
         idle: '空闲',
         noteHit: '已命中，暂停发起新探测。',
-        noteMax: '已达探测上限。',
+        noteForceStopped: '已强制停止，所有进行中的探测均已中止。',
         noteStopped: '已停止，进行中的探测会自行结束。',
         probe: '探测 {id}',
         confidence: '灰度置信度',
@@ -243,6 +253,8 @@ return {
         deleted: '已删除',
         openSession: '点击打开该会话',
         empty: '还没有探测。填写提示词后点击「开始」。',
+        emptyAllDiscarded: '目前 {count} 个探测全部被丢弃，仍在继续。',
+        status_stopped: '已停止',
         verdict_rollout: '灰度',
         verdict_old: '旧模型',
         verdict_unknown: '无法判定',
@@ -314,10 +326,16 @@ return {
       const hitKeys = Object.keys(hits);
       return React.createElement('div', {
         className: 'rsc-item',
+        'data-id': a.id,
         'data-tone': tone,
         'data-click': clickable || undefined,
         title: clickable ? t('openSession') : undefined,
-        onClick: clickable ? function () { sessions.open(a.sessionId); } : undefined,
+        // Opening a conversation dismisses the console, otherwise the session
+        // would load behind it.
+        onClick: clickable ? function () {
+          sessions.open(a.sessionId);
+          openStore.set(false);
+        } : undefined,
       },
         React.createElement('div', { className: 'rsc-item-head' },
           React.createElement('span', { className: 'rsc-item-dot', 'data-tone': tone }),
@@ -333,7 +351,8 @@ return {
         React.createElement(ScoreMeter, { score: a.score, config: props.config }),
         React.createElement('div', { className: 'rsc-evidence' },
           React.createElement('span', null, t('confidence')),
-          hitKeys.length === 0
+          a.chinese ? React.createElement('span', { className: 'rsc-chip', 'data-sign': 'neg' }, t('chineseCot')) : null,
+          hitKeys.length === 0 && !a.chinese
             ? React.createElement('span', { className: 'rsc-chip' }, t('evidenceNone'))
             : hitKeys.map(function (k) {
               const negative = k === 'let me' || k === 'we need';
@@ -344,6 +363,44 @@ return {
         ),
         a.error ? React.createElement('div', { className: 'rsc-error' }, a.error) : null,
         a.preview ? React.createElement('div', { className: 'rsc-prev' }, a.preview) : null
+      );
+    }
+
+    /**
+     * The ranked queue. Rows are reordered by score every poll, so each render
+     * plays the move as a FLIP: measure where a row was, put it back there with
+     * a transform, then release it to slide to its new place.
+     */
+    function ProbeQueue(props) {
+      const listRef = React.useRef(null);
+      const offsets = React.useRef(new Map());
+
+      React.useLayoutEffect(function () {
+        const list = listRef.current;
+        if (!list) return;
+        const next = new Map();
+        const rows = list.children;
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const id = row.getAttribute('data-id');
+          const top = row.offsetTop;
+          next.set(id, top);
+          const previous = offsets.current.get(id);
+          if (previous === undefined || previous === top) continue;
+          row.style.transition = 'none';
+          row.style.transform = 'translateY(' + (previous - top) + 'px)';
+          requestAnimationFrame(function () {
+            row.style.transition = 'transform 360ms cubic-bezier(.32,.72,0,1)';
+            row.style.transform = '';
+          });
+        }
+        offsets.current = next;
+      });
+
+      return React.createElement('div', { className: 'rsc-list', ref: listRef },
+        props.attempts.map(function (a) {
+          return React.createElement(AttemptCard, { key: a.id, attempt: a, config: props.config });
+        })
       );
     }
 
@@ -401,7 +458,7 @@ return {
       }
 
       const note = remote && remote.note === 'hit' ? t('noteHit')
-        : remote && remote.note === 'max-attempts' ? t('noteMax')
+        : remote && remote.note === 'force-stopped' ? t('noteForceStopped')
         : remote && remote.note === 'stopped' ? t('noteStopped')
         : null;
 
@@ -410,6 +467,12 @@ return {
       const best = attempts.reduce(function (m, a) {
         return typeof a.score === 'number' && a.score > m ? a.score : m;
       }, 0);
+      // Discarded probes leave the queue; what remains is ranked by confidence
+      // so the most promising catch is always at the top.
+      const queue = attempts
+        .filter(function (a) { return a.verdict !== 'old'; })
+        .sort(function (a, b) { return (b.score - a.score) || (b.id - a.id); });
+      const liveCount = remote ? remote.active : 0;
 
       return React.createElement('div', { className: 'rsc-full' },
         React.createElement('div', { className: 'rsc-top' },
@@ -457,21 +520,12 @@ return {
                 )
               )
             ),
-            React.createElement('div', { className: 'rsc-row' },
-              React.createElement(Field, { label: t('concurrency') },
-                React.createElement('input', {
-                  className: 'rsc-input', type: 'number', min: 1, max: 6,
-                  value: val('concurrency'), disabled: running,
-                  onChange: function (e) { num('concurrency', e.target.value); },
-                })
-              ),
-              React.createElement(Field, { label: t('maxAttempts') },
-                React.createElement('input', {
-                  className: 'rsc-input', type: 'number', min: 1, max: 200,
-                  value: val('maxAttempts'), disabled: running,
-                  onChange: function (e) { num('maxAttempts', e.target.value); },
-                })
-              )
+            React.createElement(Field, { label: t('concurrency') },
+              React.createElement('input', {
+                className: 'rsc-input', type: 'number', min: 1, max: 6,
+                value: val('concurrency'), disabled: running,
+                onChange: function (e) { num('concurrency', e.target.value); },
+              })
             ),
             React.createElement(Field, { label: t('folder') },
               React.createElement('input', {
@@ -513,6 +567,13 @@ return {
             ),
             React.createElement('label', { className: 'rsc-check' },
               React.createElement('input', {
+                type: 'checkbox', checked: !!val('discardChinese'), disabled: running,
+                onChange: function (e) { patch('discardChinese', e.target.checked); },
+              }),
+              React.createElement('span', null, t('discardChinese'))
+            ),
+            React.createElement('label', { className: 'rsc-check' },
+              React.createElement('input', {
                 type: 'checkbox', checked: !!val('autoDelete'), disabled: running,
                 onChange: function (e) { patch('autoDelete', e.target.checked); },
               }),
@@ -529,6 +590,11 @@ return {
                   onClick: function () { call('start', { config: Object.assign({}, config, form) }); },
                 }, t('start')),
               React.createElement('button', {
+                type: 'button', className: 'rsc-btn', 'data-danger': '',
+                title: t('forceStopHint'), disabled: liveCount === 0,
+                onClick: function () { call('force-stop'); },
+              }, t('forceStop')),
+              React.createElement('button', {
                 type: 'button', className: 'rsc-btn', disabled: running,
                 onClick: function () { call('clear'); },
               }, t('clear'))
@@ -544,13 +610,10 @@ return {
               React.createElement(Stat, { value: discarded, label: t('statDiscarded') }),
               React.createElement(Stat, { value: pct(best) + '%', label: t('statBest') })
             ),
-            React.createElement('div', { className: 'rsc-list' },
-              attempts.length === 0
-                ? React.createElement('div', { className: 'rsc-empty' }, t('empty'))
-                : attempts.map(function (a) {
-                  return React.createElement(AttemptCard, { key: a.id, attempt: a, config: config });
-                })
-            )
+            queue.length === 0
+              ? React.createElement('div', { className: 'rsc-empty' },
+                discarded > 0 ? t('emptyAllDiscarded', { count: discarded }) : t('empty'))
+              : React.createElement(ProbeQueue, { attempts: queue, config: config })
           )
         )
       );
