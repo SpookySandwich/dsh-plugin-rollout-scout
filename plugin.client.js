@@ -72,6 +72,11 @@ const CSS = [
   '.rsc-launch[data-live]{border-color:var(--dsw-alias-accent-primary,#4b8dff)}',
   '.rsc-launch[data-live] .rsc-dot{background:var(--dsw-alias-accent-primary,#4b8dff);animation:rsc-pulse 1.4s ease-in-out infinite}',
   '@keyframes rsc-pulse{0%,100%{opacity:1}50%{opacity:.35}}',
+  '.rsc-launch[data-paused]{border-color:color-mix(in srgb,var(--dsw-alias-label-primary,#fff) 26%,transparent)}',
+  '.rsc-launch[data-paused] .rsc-dot{background:var(--dsw-alias-label-secondary,#bbb)}',
+  '.rsc-launch[data-caught]{border-color:#3fbf6f;color:var(--dsw-alias-label-primary)}',
+  '.rsc-launch[data-caught] .rsc-dot{background:#3fbf6f;animation:none}',
+  '.rsc-pill-badge{min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#3fbf6f;color:#04210f;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}',
 
   /* -- full-frame surface ------------------------------------------------ */
   '.rsc-full{position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;background:color-mix(in srgb,var(--dsw-alias-bg-primary,#16161a) 94%,transparent);-webkit-backdrop-filter:blur(30px) saturate(1.4);backdrop-filter:blur(30px) saturate(1.4);color:var(--dsw-alias-label-primary);font-size:13px;animation:rsc-in 260ms cubic-bezier(.32,.72,0,1) both}',
@@ -162,6 +167,10 @@ return {
         title: 'Rollout Scout',
         tagline: 'Start throwaway conversations and score their chain-of-thought to find a limited-rollout model.',
         launcher: 'Rollout Scout',
+        pillRunning: 'Scouting {active} · {launched} tried',
+        pillPaused: 'Paused · {launched} tried',
+        pillDone: 'Idle · {launched} tried',
+        pillBest: 'Best rollout confidence so far: {score}%',
         close: 'Close',
         setup: 'Probe setup',
         scoring: 'Scoring',
@@ -226,6 +235,10 @@ return {
         title: '灰度侦察',
         tagline: '开启一批临时会话，为它们的思维链打分，用来寻找灰度发布的模型。',
         launcher: '灰度侦察',
+        pillRunning: '侦察中 {active} · 已试 {launched}',
+        pillPaused: '已暂停 · 已试 {launched}',
+        pillDone: '空闲 · 已试 {launched}',
+        pillBest: '目前最高灰度置信度：{score}%',
         close: '关闭',
         setup: '探测设置',
         scoring: '评分',
@@ -684,31 +697,59 @@ return {
       return openStore.value;
     }
 
-    function useLive(open) {
-      const [live, setLive] = React.useState(false);
+    /**
+     * The run lives on the host, so it continues while the console is closed.
+     * The launcher keeps polling a summary of it either way — closed, it is
+     * the only thing telling you the run is still going.
+     */
+    function useSummary(open) {
+      const [summary, setSummary] = React.useState(null);
       React.useEffect(function () {
         let alive = true;
         const tick = function () {
-          api('GET').then(function (v) { if (alive) setLive(!!v.running); }).catch(function () {});
+          api('GET').then(function (v) {
+            if (!alive) return;
+            setSummary({
+              running: !!v.running,
+              paused: !!v.paused,
+              active: v.active || 0,
+              launched: v.launched || 0,
+              kept: (v.attempts || []).filter(function (a) { return a.verdict === 'rollout'; }).length,
+              best: (v.attempts || []).reduce(function (m, a) {
+                return typeof a.score === 'number' && a.score > m ? a.score : m;
+              }, 0),
+            });
+          }).catch(function () {});
         };
         tick();
-        const timer = setInterval(tick, open ? 4000 : 8000);
+        const timer = setInterval(tick, open ? 4000 : 2000);
         return function () { alive = false; clearInterval(timer); };
       }, [open]);
-      return live;
+      return summary;
     }
 
     function Launcher() {
       const open = useOpen();
-      const live = useLive(open);
+      const s = useSummary(open);
+      const running = !!(s && s.running);
+      const paused = !!(s && s.paused);
+      const caught = s && s.kept > 0;
+      const label = !s || (!running && !paused && s.launched === 0) ? t('launcher')
+        : running ? t('pillRunning', { active: s.active, launched: s.launched })
+        : paused ? t('pillPaused', { launched: s.launched })
+        : t('pillDone', { launched: s.launched });
       return React.createElement('button', {
         type: 'button',
         className: 'rsc-launch',
-        'data-live': live || undefined,
+        'data-live': running || undefined,
+        'data-paused': paused || undefined,
+        'data-caught': caught || undefined,
+        title: s && s.launched > 0 ? t('pillBest', { score: pct(s.best) }) : undefined,
         onClick: function () { openStore.set(!open); },
       },
         React.createElement('span', { className: 'rsc-dot' }),
-        React.createElement('span', null, t('launcher'))
+        React.createElement('span', null, label),
+        caught ? React.createElement('span', { className: 'rsc-pill-badge' }, s.kept) : null
       );
     }
 
