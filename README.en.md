@@ -64,7 +64,7 @@ A pill sits at the bottom-right of the window and opens a full-frame console.
 
 **Start** becomes **Pause**, which stops launching while letting probes already in flight reach their own verdict, then **Resume**. **Force stop** aborts everything mid-thought.
 
-A probe about to be discarded stays for **5 seconds** with a countdown. **Keep** pins it and lets the turn continue so you can open and read the chain-of-thought; then **Discard** or **Save** on that row. Unpinned discards fade out of the queue but stay in the count.
+Discarded probes fade out of the queue but stay in the count. The list is in launch order and is never resorted, so a card stays where it is.
 
 **Clear finished** removes completed probes from the list *and* deletes those conversations from disk. **Delete all sessions** wipes every probe in the folder — including ones already cleared from the list — and resets numbering so the next run starts at probe 1.
 
