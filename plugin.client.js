@@ -53,6 +53,9 @@ const STATUS_TONE = {
   streaming: 'wait',
   'kept-streaming': 'good',
   kept: 'good',
+  'pending-discard': 'bad',
+  pinned: 'wait',
+  saved: 'good',
   discarding: 'bad',
   discarded: 'bad',
   finished: 'neutral',
@@ -147,6 +150,15 @@ const CSS = [
   '.rsc-chip[data-sign=neg]{background:color-mix(in srgb,var(--dsw-alias-status-error,#e5484d) 16%,transparent);color:var(--dsw-alias-status-error,#e5484d)}',
   '.rsc-chip[data-sign=pos]{background:color-mix(in srgb,#3fbf6f 16%,transparent);color:#3fbf6f}',
   '.rsc-prev{font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-tertiary);margin-top:7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
+  '.rsc-grace{display:flex;align-items:center;gap:10px;margin-top:9px}',
+  '.rsc-grace-track{flex:1;height:5px;border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-status-error,#e5484d) 18%,transparent);overflow:hidden}',
+  '.rsc-grace-fill{height:100%;border-radius:999px;background:var(--dsw-alias-status-error,#e5484d)}',
+  '.rsc-grace-s{font-size:12px;font-variant-numeric:tabular-nums;font-weight:600;color:var(--dsw-alias-status-error,#e5484d);min-width:32px}',
+  '.rsc-row-actions{display:flex;gap:8px;margin-top:8px}',
+  '.rsc-mini{padding:5px 12px;border-radius:999px;border:1px solid color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 34%,transparent);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;cursor:pointer}',
+  '.rsc-mini[data-primary]{background:var(--dsw-alias-accent-primary,#4b8dff);border-color:transparent;color:#fff}',
+  '.rsc-mini[data-danger]{border-color:color-mix(in srgb,var(--dsw-alias-status-error,#e5484d) 55%,transparent);color:var(--dsw-alias-status-error,#e5484d)}',
+  '.rsc-mini:hover{background:var(--dsw-alias-interactive-bg-hover)}',
   '.rsc-empty{color:var(--dsw-alias-label-tertiary);padding:40px 0;text-align:center;font-size:13px}',
   '.rsc-link{font-size:11.5px;color:var(--dsw-alias-label-tertiary);text-decoration:none}',
   '.rsc-link:hover{color:var(--dsw-alias-label-primary)}',
@@ -189,16 +201,19 @@ return {
         forceStopHint: 'Stop launching and abort every conversation still in flight.',
         discardChinese: 'Discard when the chain-of-thought is mostly Chinese (80%+)',
         chineseCot: 'Chinese CoT',
-        scoringHint: 'A paragraph opening with “I’ll” is decisive for the rollout model; “Let me”, or a first paragraph already speaking as “we” / “we need” / “we will”, is decisive against. Openings are scored as soon as 48 characters have arrived — a single block of reasoning no longer sits at 50% until the turn ends. A probe that finishes without a keep is discarded.',
+        scoringHint: 'A paragraph opening with “I’ll” is decisive for the rollout model; “Let me”, or a first paragraph already speaking as “we” / “we need” / “we will”, is decisive against. Openings are scored as soon as 48 characters have arrived. A probe about to be discarded waits 5 seconds with a countdown — Keep pins it so you can read the chain-of-thought, then Discard or Save.',
         reason_decisive: 'decisive opening',
         reason_score: 'opening score',
         reason_window: 'no positive opening',
         reason_chinese: 'Chinese CoT',
         reason_ended: 'finished without a keep',
         autoPauseOnMatch: 'Auto-pause on a strong match',
-        autoDiscard: 'Auto-discard probes judged as the old model',
-        autoDiscardHint: 'Off: flag them and let the turn finish so you can open a suspected false negative.',
         autoDelete: 'Delete old-model probes from disk',
+        graceKeep: 'Keep',
+        graceHint: 'Discarding in {s}s — Keep to pin and keep reading the chain-of-thought.',
+        rowDiscard: 'Discard',
+        rowSave: 'Save',
+        pinnedHint: 'Pinned — still running so you can read the chain-of-thought.',
         start: 'Start',
         pause: 'Pause',
         resume: 'Resume',
@@ -236,6 +251,9 @@ return {
         status_discarded: 'discarded',
         status_finished: 'finished',
         status_error: 'error',
+        'status_pending-discard': 'discarding soon',
+        status_pinned: 'pinned',
+        status_saved: 'saved',
       },
       zh: {
         title: '灰度侦察',
@@ -263,16 +281,19 @@ return {
         forceStopHint: '停止发起，并中止所有进行中的会话。',
         discardChinese: '思维链以中文为主（80% 以上）时丢弃',
         chineseCot: '中文思维链',
-        scoringHint: '段落以「I’ll」开头即判定为灰度模型；以「Let me」开头，或第一段已经在说「we / we need / we will」，即判定为旧模型。开头写满 48 个字符就会打分——整段没有换行也不会一直停在 50%。一轮结束时仍未命中灰度的，一律丢弃。',
+        scoringHint: '段落以「I’ll」开头即判定为灰度模型；以「Let me」开头，或第一段已经在说「we / we need / we will」，即判定为旧模型。开头写满 48 个字符就会打分。即将丢弃的探测会倒计时 5 秒，点「保留」可钉住继续看思维链，然后再选丢弃或保存。',
         reason_decisive: '决定性开头',
         reason_score: '开头评分',
         reason_window: '无正向开头',
         reason_chinese: '中文思维链',
         reason_ended: '结束时未命中',
         autoPauseOnMatch: '命中强匹配时自动暂停',
-        autoDiscard: '自动丢弃判为旧模型的探测',
-        autoDiscardHint: '关闭后只标记、不中止，方便打开检查是否误杀。',
         autoDelete: '从磁盘删除判为旧模型的会话',
+        graceKeep: '保留',
+        graceHint: '{s} 秒后丢弃 — 点保留可钉住并继续看思维链。',
+        rowDiscard: '丢弃',
+        rowSave: '保存',
+        pinnedHint: '已钉住，会话继续跑，可点开查看思维链。',
         start: '开始',
         pause: '暂停',
         resume: '继续',
@@ -310,6 +331,9 @@ return {
         status_discarded: '已丢弃',
         status_finished: '已结束',
         status_error: '出错',
+        'status_pending-discard': '即将丢弃',
+        status_pinned: '已钉住',
+        status_saved: '已保存',
       },
     };
     let t = function (key, params) {
@@ -362,22 +386,52 @@ return {
       );
     }
 
+    function GraceBar(props) {
+      const until = props.until;
+      const [left, setLeft] = React.useState(function () { return Math.max(0, until - Date.now()); });
+      React.useEffect(function () {
+        setLeft(Math.max(0, until - Date.now()));
+        const timer = setInterval(function () { setLeft(Math.max(0, until - Date.now())); }, 80);
+        return function () { clearInterval(timer); };
+      }, [until]);
+      const frac = Math.max(0, Math.min(1, left / 5000));
+      return React.createElement('div', { className: 'rsc-grace' },
+        React.createElement('div', { className: 'rsc-grace-track' },
+          React.createElement('div', { className: 'rsc-grace-fill', style: { width: (frac * 100) + '%' } })),
+        React.createElement('span', { className: 'rsc-grace-s' }, (left / 1000).toFixed(1) + 's')
+      );
+    }
+
     function AttemptCard(props) {
       const a = props.attempt;
       const tone = STATUS_TONE[a.status] || 'neutral';
       const clickable = !!a.sessionId && !a.deleted && sessions;
       const hits = a.hits || {};
       const hitKeys = Object.keys(hits);
+      const pending = a.status === 'pending-discard' && a.graceUntil;
+      const pinnedOpen = !!a.pinned && !a.saved && a.status !== 'discarded';
+      let badgeTone;
+      let badgeKey;
+      if (a.saved) { badgeTone = 'good'; badgeKey = 'status_saved'; }
+      else if (a.pinned) { badgeTone = 'good'; badgeKey = 'status_pinned'; }
+      else if (pending) { badgeTone = 'bad'; badgeKey = 'status_pending-discard'; }
+      else if (a.verdict) {
+        badgeTone = a.verdict === 'rollout' ? 'good' : (a.verdict === 'old' ? 'bad' : undefined);
+        badgeKey = 'verdict_' + a.verdict;
+      }
+      function act(kind, event) {
+        if (event) event.stopPropagation();
+        if (props.onAction) props.onAction(kind, a.id);
+      }
       return React.createElement('div', {
         className: 'rsc-item',
         'data-id': a.id,
-        'data-leaving': a.verdict === 'old' && a.endedAt && !(props.config && props.config.autoDiscard === false) ? '' : undefined,
+        'data-leaving': a.status === 'discarded' && a.endedAt && !a.pinned && !a.saved ? '' : undefined,
         'data-tone': tone,
         'data-click': clickable || undefined,
         title: clickable ? t('openSession') : undefined,
-        // Opening a conversation dismisses the console, otherwise the session
-        // would load behind it.
-        onClick: clickable ? function () {
+        onClick: clickable ? function (event) {
+          if (event.target && event.target.closest && event.target.closest('button')) return;
           sessions.open(a.sessionId);
           openStore.set(false);
         } : undefined,
@@ -388,10 +442,10 @@ return {
           React.createElement('span', { className: 'rsc-item-status' },
             t('status_' + a.status) + ' · ' + t('chars', { count: a.chars })
             + (a.deleted ? ' · ' + t('deleted') : '')),
-          a.verdict ? React.createElement('span', {
+          badgeKey ? React.createElement('span', {
             className: 'rsc-badge',
-            'data-tone': a.verdict === 'rollout' ? 'good' : (a.verdict === 'old' ? 'bad' : undefined),
-          }, t('verdict_' + a.verdict)) : null
+            'data-tone': badgeTone,
+          }, t(badgeKey)) : null
         ),
         React.createElement(ScoreMeter, { score: a.score, config: props.config }),
         React.createElement('div', { className: 'rsc-evidence' },
@@ -413,7 +467,25 @@ return {
             })
         ),
         a.error ? React.createElement('div', { className: 'rsc-error' }, a.error) : null,
-        a.preview ? React.createElement('div', { className: 'rsc-prev' }, a.preview) : null
+        a.preview ? React.createElement('div', { className: 'rsc-prev' }, a.preview) : null,
+        pending ? React.createElement(GraceBar, { until: a.graceUntil }) : null,
+        pending ? React.createElement('div', { className: 'rsc-row-actions' },
+          React.createElement('button', {
+            type: 'button', className: 'rsc-mini', 'data-primary': '',
+            onClick: function (e) { act('pin', e); },
+          }, t('graceKeep'))
+        ) : null,
+        pinnedOpen ? React.createElement('div', { className: 'rsc-hint' }, t('pinnedHint')) : null,
+        pinnedOpen ? React.createElement('div', { className: 'rsc-row-actions' },
+          React.createElement('button', {
+            type: 'button', className: 'rsc-mini', 'data-danger': '',
+            onClick: function (e) { act('discard-one', e); },
+          }, t('rowDiscard')),
+          React.createElement('button', {
+            type: 'button', className: 'rsc-mini', 'data-primary': '',
+            onClick: function (e) { act('save', e); },
+          }, t('rowSave'))
+        ) : null
       );
     }
 
@@ -450,7 +522,9 @@ return {
 
       return React.createElement('div', { className: 'rsc-list', ref: listRef },
         props.attempts.map(function (a) {
-          return React.createElement(AttemptCard, { key: a.id, attempt: a, config: props.config });
+          return React.createElement(AttemptCard, {
+            key: a.id, attempt: a, config: props.config, onAction: props.onAction,
+          });
         })
       );
     }
@@ -515,7 +589,7 @@ return {
         : null;
 
       const kept = attempts.filter(function (a) { return a.verdict === 'rollout'; }).length;
-      const discarded = attempts.filter(function (a) { return a.verdict === 'old'; }).length;
+      const discarded = attempts.filter(function (a) { return a.status === 'discarded'; }).length;
       const best = attempts.reduce(function (m, a) {
         return typeof a.score === 'number' && a.score > m ? a.score : m;
       }, 0);
@@ -525,8 +599,8 @@ return {
       const now = Date.now();
       const queue = attempts
         .filter(function (a) {
-          if (a.verdict !== 'old') return true;
-          if (config && config.autoDiscard === false) return true;
+          if (a.pinned || a.saved || a.status === 'pending-discard') return true;
+          if (a.verdict !== 'old' && a.status !== 'discarded') return true;
           return !a.endedAt || (now - a.endedAt) < LINGER_MS;
         })
         .sort(function (a, b) { return (b.score - a.score) || (b.id - a.id); });
@@ -640,16 +714,6 @@ return {
             ),
             React.createElement('label', { className: 'rsc-check' },
               React.createElement('input', {
-                type: 'checkbox',
-                checked: form.autoDiscard !== undefined ? !!form.autoDiscard : (config ? config.autoDiscard !== false : true),
-                disabled: running,
-                onChange: function (e) { patch('autoDiscard', e.target.checked); },
-              }),
-              React.createElement('span', null, t('autoDiscard'))
-            ),
-            React.createElement('div', { className: 'rsc-hint' }, t('autoDiscardHint')),
-            React.createElement('label', { className: 'rsc-check' },
-              React.createElement('input', {
                 type: 'checkbox', checked: !!val('autoDelete'), disabled: running,
                 onChange: function (e) { patch('autoDelete', e.target.checked); },
               }),
@@ -703,7 +767,10 @@ return {
             queue.length === 0
               ? React.createElement('div', { className: 'rsc-empty' },
                 discarded > 0 ? t('emptyAllDiscarded', { count: discarded }) : t('empty'))
-              : React.createElement(ProbeQueue, { attempts: queue, config: config })
+              : React.createElement(ProbeQueue, {
+                attempts: queue, config: config,
+                onAction: function (kind, id) { call(kind, { id: id }); },
+              })
           )
         )
       );
