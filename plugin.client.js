@@ -2,9 +2,10 @@
 //
 // A full-frame console that drives the host's probe loop: enter a prompt,
 // pick model / concurrency / folder, press Start, and watch probes stream.
-// Each probe carries a live rollout confidence score built from weighted
-// phrase evidence; probes that fall below the discard line are cancelled
-// mid-thought, and confident catches are kept.
+// Each probe carries a live rollout confidence built from how its paragraphs
+// open; probes that read as the old model are cancelled mid-thought, and
+// confident catches are kept. Start toggles to Pause, which stops launching
+// while letting live probes finish, and back to Resume.
 
 const ROUTE = '/rollout-scout';
 const POLL_MS = 800;
@@ -183,10 +184,11 @@ return {
         reason_score: 'opening score',
         reason_window: 'no positive opening',
         reason_chinese: 'Chinese CoT',
-        stopAfterHit: 'Stop launching after the first catch',
+        autoPauseOnMatch: 'Auto-pause on a strong match',
         autoDelete: 'Delete old-model probes from disk',
         start: 'Start',
-        stop: 'Stop',
+        pause: 'Pause',
+        resume: 'Resume',
         clear: 'Clear finished',
         effortDefault: 'Provider default',
         statLaunched: 'Launched',
@@ -196,9 +198,9 @@ return {
         statBest: 'Best score',
         running: 'Scouting — {active} live, {launched} launched',
         idle: 'Idle',
-        noteHit: 'Caught one. Launching paused.',
+        noteHit: 'Caught one — launching paused. Press Resume to continue.',
         noteForceStopped: 'Force stopped. Every probe in flight was aborted.',
-        noteStopped: 'Stopped. Live probes will finish on their own.',
+        notePaused: 'Paused. Live probes will finish on their own; press Resume to keep fishing.',
         probe: 'Probe {id}',
         confidence: 'rollout confidence',
         evidenceNone: 'no classified opening yet',
@@ -246,10 +248,11 @@ return {
         reason_score: '开头评分',
         reason_window: '无正向开头',
         reason_chinese: '中文思维链',
-        stopAfterHit: '命中一次后停止发起新探测',
+        autoPauseOnMatch: '命中强匹配时自动暂停',
         autoDelete: '从磁盘删除判为旧模型的会话',
         start: '开始',
-        stop: '停止',
+        pause: '暂停',
+        resume: '继续',
         clear: '清空已结束',
         effortDefault: '服务商默认',
         statLaunched: '已发起',
@@ -259,9 +262,9 @@ return {
         statBest: '最高分',
         running: '侦察中 — {active} 进行中，已发起 {launched}',
         idle: '空闲',
-        noteHit: '已命中，暂停发起新探测。',
+        noteHit: '已命中——发起已暂停，点击「继续」继续。',
         noteForceStopped: '已强制停止，所有进行中的探测均已中止。',
-        noteStopped: '已停止，进行中的探测会自行结束。',
+        notePaused: '已暂停，进行中的探测会自行结束；点击「继续」可继续钓。',
         probe: '探测 {id}',
         confidence: '灰度置信度',
         evidenceNone: '暂无可分类开头',
@@ -467,6 +470,7 @@ return {
       }
 
       const running = !!(remote && remote.running);
+      const paused = !!(remote && remote.paused);
       const attempts = remote ? remote.attempts : [];
 
       async function call(action, extra) {
@@ -478,7 +482,7 @@ return {
 
       const note = remote && remote.note === 'hit' ? t('noteHit')
         : remote && remote.note === 'force-stopped' ? t('noteForceStopped')
-        : remote && remote.note === 'stopped' ? t('noteStopped')
+        : remote && remote.note === 'paused' ? t('notePaused')
         : null;
 
       const kept = attempts.filter(function (a) { return a.verdict === 'rollout'; }).length;
@@ -591,10 +595,10 @@ return {
             React.createElement('div', { className: 'rsc-hint' }, t('scoringHint')),
             React.createElement('label', { className: 'rsc-check' },
               React.createElement('input', {
-                type: 'checkbox', checked: !!val('stopAfterHit'), disabled: running,
-                onChange: function (e) { patch('stopAfterHit', e.target.checked); },
+                type: 'checkbox', checked: !!val('autoPauseOnMatch'), disabled: running,
+                onChange: function (e) { patch('autoPauseOnMatch', e.target.checked); },
               }),
-              React.createElement('span', null, t('stopAfterHit'))
+              React.createElement('span', null, t('autoPauseOnMatch'))
             ),
             React.createElement('label', { className: 'rsc-check' },
               React.createElement('input', {
@@ -613,13 +617,17 @@ return {
             React.createElement('div', { className: 'rsc-actions' },
               running
                 ? React.createElement('button', {
-                  type: 'button', className: 'rsc-btn', 'data-danger': '',
-                  onClick: function () { call('stop'); },
-                }, t('stop'))
+                  type: 'button', className: 'rsc-btn',
+                  onClick: function () { call('pause'); },
+                }, t('pause'))
                 : React.createElement('button', {
                   type: 'button', className: 'rsc-btn', 'data-primary': '', disabled: !remote,
-                  onClick: function () { call('start', { config: Object.assign({}, config, form) }); },
-                }, t('start')),
+                  onClick: function () {
+                    // Resume keeps the run and its config; Start begins a new one.
+                    if (paused) call('resume');
+                    else call('start', { config: Object.assign({}, config, form) });
+                  },
+                }, paused ? t('resume') : t('start')),
               React.createElement('button', {
                 type: 'button', className: 'rsc-btn', 'data-danger': '',
                 title: t('forceStopHint'), disabled: liveCount === 0,
