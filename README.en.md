@@ -34,7 +34,7 @@ When neither fires, the remaining openings feed a score:
 confidence = (positive openings + 1) / (classified openings + 2)
 ```
 
-A paragraph opening is scored as soon as 48 characters have arrived, even if the model never inserts a newline. A first paragraph already speaking as `we` / `we need` / `we will` is decisive against, same class of tell as `Let me`. A probe that **finishes** without a keep is discarded — the 50% gray zone is only for live probes still gathering openings.
+A paragraph opening is scored as soon as 48 characters have arrived, even if the model never inserts a newline. A first paragraph already speaking as `we` / `we need` / `we will` is decisive against, same class of tell as `Let me`. `Let me` later in the chain-of-thought **overrides** an earlier keep — a probe that looked like the rollout model and then said `Let me` is cancelled and auto-deleted, not left sitting as a green catch at 0%. A probe that **finishes** without a keep is discarded — the 50% gray zone is only for live probes still gathering openings.
 
 Positive openings are the first-person **singular** planning voice — `I'm`, `I am`, `I've`, `I have`, `I need`, `I think`, `I also`, `I will`, and a leading `For`. Negative openings are `Let me` / `Let's` and **any** first-person plural in the opening (`we`, `we need`, `we will`, `we'll`, …). The rollout model reasons in "I", not "we". The add-one prior keeps a thin sample near 50% instead of swinging to a confident verdict off one word:
 

@@ -121,6 +121,13 @@ const weNeedBlob = 'We need respond in Chinese. User asks "做一个 3D 赛博�
 
 const blandFinished = `The user wants a 3D cyberpunk scene. This is a creative coding task in the current working directory as a single HTML file.`;
 
+// The live false-keep: opens like the rollout model, then "Let me" appears.
+const illFirstThenLetMe = `I'll work through this in a single HTML file with Three.js from a CDN.
+
+Let me start by setting up the scene and the camera.
+
+Let me add the earth mesh next.`;
+
 const cases = [
   ['LABELLED new model', newModel, 'keep'],
   ['LABELLED old model', oldModel, 'discard'],
@@ -132,6 +139,7 @@ const cases = [
   ['We need / We will openings', weNeedOpenings, 'discard'],
   ['single-blob We need (no newlines)', weNeedBlob, 'discard'],
   ['finished with no I/we signal', blandFinished, 'discard'],
+  ['I-will first, Let me later', illFirstThenLetMe, 'discard'],
 ];
 
 let failed = 0;

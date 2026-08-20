@@ -400,7 +400,9 @@ return {
             : hitKeys.map(function (k) {
               const hit = hits[k];
               const count = hit && typeof hit === 'object' ? hit.count : hit;
-              const sign = hit && typeof hit === 'object' && hit.sign === 'neg' ? 'neg' : 'pos';
+              const tagged = hit && typeof hit === 'object' ? hit.sign : null;
+              const negPhrase = /^(let me|let us|let's|we)\b/i.test(String(k));
+              const sign = tagged === 'neg' || negPhrase ? 'neg' : 'pos';
               return React.createElement('span', {
                 key: k, className: 'rsc-chip', 'data-sign': sign,
               }, k + ' ×' + count);
