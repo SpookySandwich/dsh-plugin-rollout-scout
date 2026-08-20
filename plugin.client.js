@@ -8,6 +8,8 @@
 
 const ROUTE = '/rollout-scout';
 const POLL_MS = 800;
+// How long a discarded probe stays visible before it leaves the queue.
+const LINGER_MS = 3200;
 
 function realGlobal() {
   try { if (typeof window !== 'undefined' && window) return window; } catch (e) {}
@@ -109,6 +111,8 @@ const CSS = [
   '.rsc-stat-k{font-size:11px;color:var(--dsw-alias-label-tertiary);margin-top:1px}',
   '.rsc-list{display:flex;flex-direction:column;gap:8px}',
   '@keyframes rsc-row-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}',
+  '.rsc-item[data-leaving]{animation:rsc-row-out 3200ms ease-in both}',
+  '@keyframes rsc-row-out{0%{opacity:1}70%{opacity:.5}100%{opacity:0}}',
   '.rsc-item{animation:rsc-row-in 300ms cubic-bezier(.32,.72,0,1) both;padding:11px 13px;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 8%,transparent);border:1px solid transparent}',
   '.rsc-item[data-tone=good]{border-color:color-mix(in srgb,#3fbf6f 45%,transparent)}',
   '.rsc-item[data-tone=bad]{opacity:.72}',
@@ -167,12 +171,18 @@ return {
         folder: 'Folder for probe sessions',
         discardBelow: 'Discard below',
         keepAbove: 'Keep above',
-        minEvidence: 'Min. evidence',
+        minOpenings: 'Min. openings',
+        paragraphWindow: 'Give up after',
+        paragraphs: '{count} paragraphs',
         forceStop: 'Force stop',
         forceStopHint: 'Stop launching and abort every conversation still in flight.',
         discardChinese: 'Discard Chinese chain-of-thought on sight',
         chineseCot: 'Chinese CoT',
-        scoringHint: 'Score is the share of weighted evidence favouring the rollout model. "Let me" and "We need" count double against it. Neither verdict fires until minimum evidence accumulates, so one stray phrase cannot decide.',
+        scoringHint: 'A paragraph opening with “I’ll” is decisive for the rollout model; one opening with “Let me” is decisive against — whichever appears first settles it. Otherwise the score is the share of classified openings reading as the rollout (“I am”, “I’m”, “I need”, “For”), acted on only once enough openings exist. A probe that opens this many paragraphs without a single positive one is given up on.',
+        reason_decisive: 'decisive opening',
+        reason_score: 'opening score',
+        reason_window: 'no positive opening',
+        reason_chinese: 'Chinese CoT',
         stopAfterHit: 'Stop launching after the first catch',
         autoDelete: 'Delete old-model probes from disk',
         start: 'Start',
@@ -191,7 +201,7 @@ return {
         noteStopped: 'Stopped. Live probes will finish on their own.',
         probe: 'Probe {id}',
         confidence: 'rollout confidence',
-        evidenceNone: 'no evidence yet',
+        evidenceNone: 'no classified opening yet',
         chars: '{count} chars',
         deleted: 'deleted',
         openSession: 'Click to open this conversation',
@@ -224,12 +234,18 @@ return {
         folder: '探测会话存放目录',
         discardBelow: '低于此分即丢弃',
         keepAbove: '高于此分即保留',
-        minEvidence: '最少证据量',
+        minOpenings: '最少开头数',
+        paragraphWindow: '放弃阈值',
+        paragraphs: '{count} 段',
         forceStop: '强制停止',
         forceStopHint: '停止发起，并中止所有进行中的会话。',
         discardChinese: '思维链为中文时立即丢弃',
         chineseCot: '中文思维链',
-        scoringHint: '分数表示加权证据中支持「灰度模型」的比例。「Let me」与「We need」按双倍计入反方。证据量不足时不作判定，避免被个别词误导。',
+        scoringHint: '段落以「I’ll」开头即判定为灰度模型，以「Let me」开头即判定为旧模型——以先出现者为准。两者都没出现时，按已分类段落开头中读作灰度风格（「I am」「I’m」「I need」「For」）的比例打分，且开头数量足够后才据此判定。若在设定的段数内一个正向开头都没有出现，则放弃该探测。',
+        reason_decisive: '决定性开头',
+        reason_score: '开头评分',
+        reason_window: '无正向开头',
+        reason_chinese: '中文思维链',
         stopAfterHit: '命中一次后停止发起新探测',
         autoDelete: '从磁盘删除判为旧模型的会话',
         start: '开始',
@@ -248,7 +264,7 @@ return {
         noteStopped: '已停止，进行中的探测会自行结束。',
         probe: '探测 {id}',
         confidence: '灰度置信度',
-        evidenceNone: '暂无证据',
+        evidenceNone: '暂无可分类开头',
         chars: '{count} 字',
         deleted: '已删除',
         openSession: '点击打开该会话',
@@ -327,6 +343,7 @@ return {
       return React.createElement('div', {
         className: 'rsc-item',
         'data-id': a.id,
+        'data-leaving': a.verdict === 'old' && a.endedAt ? '' : undefined,
         'data-tone': tone,
         'data-click': clickable || undefined,
         title: clickable ? t('openSession') : undefined,
@@ -351,6 +368,8 @@ return {
         React.createElement(ScoreMeter, { score: a.score, config: props.config }),
         React.createElement('div', { className: 'rsc-evidence' },
           React.createElement('span', null, t('confidence')),
+          React.createElement('span', { className: 'rsc-chip' }, t('paragraphs', { count: a.paragraphs || 0 })),
+          a.reason ? React.createElement('span', { className: 'rsc-chip' }, t('reason_' + a.reason)) : null,
           a.chinese ? React.createElement('span', { className: 'rsc-chip', 'data-sign': 'neg' }, t('chineseCot')) : null,
           hitKeys.length === 0 && !a.chinese
             ? React.createElement('span', { className: 'rsc-chip' }, t('evidenceNone'))
@@ -467,10 +486,15 @@ return {
       const best = attempts.reduce(function (m, a) {
         return typeof a.score === 'number' && a.score > m ? a.score : m;
       }, 0);
-      // Discarded probes leave the queue; what remains is ranked by confidence
-      // so the most promising catch is always at the top.
+      // Discarded probes leave the queue, but not instantly: a verdict can land
+      // in under two seconds, and vanishing on the same tick makes the run look
+      // like nothing happened. They fade out over LINGER_MS first.
+      const now = Date.now();
       const queue = attempts
-        .filter(function (a) { return a.verdict !== 'old'; })
+        .filter(function (a) {
+          if (a.verdict !== 'old') return true;
+          return !a.endedAt || (now - a.endedAt) < LINGER_MS;
+        })
         .sort(function (a, b) { return (b.score - a.score) || (b.id - a.id); });
       const liveCount = remote ? remote.active : 0;
 
@@ -549,11 +573,18 @@ return {
                   onChange: function (e) { num('keepAbove', e.target.value, true); },
                 })
               ),
-              React.createElement(Field, { label: t('minEvidence') },
+              React.createElement(Field, { label: t('minOpenings') },
                 React.createElement('input', {
                   className: 'rsc-input', type: 'number', min: 1, max: 40,
-                  value: val('minEvidence'), disabled: running,
-                  onChange: function (e) { num('minEvidence', e.target.value); },
+                  value: val('minOpenings'), disabled: running,
+                  onChange: function (e) { num('minOpenings', e.target.value); },
+                })
+              ),
+              React.createElement(Field, { label: t('paragraphWindow') },
+                React.createElement('input', {
+                  className: 'rsc-input', type: 'number', min: 2, max: 200,
+                  value: val('paragraphWindow'), disabled: running,
+                  onChange: function (e) { num('paragraphWindow', e.target.value); },
                 })
               )
             ),
