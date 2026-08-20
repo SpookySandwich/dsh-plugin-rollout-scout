@@ -128,6 +128,23 @@ Let me start by setting up the scene and the camera.
 
 Let me add the earth mesh next.`;
 
+// Observed new-model CoT: long first-person planning, "For"/"I'll"/"I'm"
+// openings, and a trailing "Let me start writing the file" that is NOT a
+// paragraph opening. Must keep — that Let me must not flip the verdict.
+const newModelLetMeInBody = `For mode A N=10 or 20, I'll simulate the linear plant using the structural matrices.
+
+For mode B's eigenvalues, I'm using a Jacobi eigensolver on dense matrices up to 65×65.
+
+The key insight is that the full plant is not diagonalized—it's represented in the original coordinate system.
+
+For the convergence analysis, I'm running independent simulations for N=8, 16, 32, and 64.
+
+For the UI, I'm adding a convergence results panel with a small table and a bar chart.
+
+For the control period and integration step, I'm using 5 ms and 1 ms respectively.
+
+Now I'm setting up the UI layout with a top bar for mode selection and status, a left panel for simulation. I'm keeping the height and width sensible for 1080p and 4K displays with responsive CSS. Let me start writing the file in two parts, beginning with the physics core and self-tests, then running the Node tests.`;
+
 const cases = [
   ['LABELLED new model', newModel, 'keep'],
   ['LABELLED old model', oldModel, 'discard'],
@@ -140,6 +157,7 @@ const cases = [
   ['single-blob We need (no newlines)', weNeedBlob, 'discard'],
   ['finished with no I/we signal', blandFinished, 'discard'],
   ['I-will first, Let me later', illFirstThenLetMe, 'discard'],
+  ['new model with Let me only in paragraph body', newModelLetMeInBody, 'keep'],
 ];
 
 let failed = 0;
