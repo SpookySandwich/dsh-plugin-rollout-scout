@@ -9,8 +9,6 @@
 
 const ROUTE = '/rollout-scout';
 const POLL_MS = 800;
-// How long a discarded probe stays visible before it leaves the queue.
-const LINGER_MS = 3200;
 
 function realGlobal() {
   try { if (typeof window !== 'undefined' && window) return window; } catch (e) {}
@@ -53,6 +51,8 @@ const STATUS_TONE = {
   streaming: 'wait',
   'kept-streaming': 'good',
   kept: 'good',
+  'pending-discard': 'bad',
+  pinned: 'wait',
   discarding: 'bad',
   discarded: 'bad',
   finished: 'neutral',
@@ -117,9 +117,11 @@ const CSS = [
   '.rsc-stat-k{font-size:11px;color:var(--dsw-alias-label-tertiary);margin-top:1px}',
   '.rsc-list{display:flex;flex-direction:column;gap:8px}',
   '@keyframes rsc-row-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}',
-  '.rsc-item[data-leaving]{animation:rsc-row-out 3200ms ease-in both}',
-  '@keyframes rsc-row-out{0%{opacity:1}70%{opacity:.5}100%{opacity:0}}',
-  '.rsc-item{animation:rsc-row-in 300ms cubic-bezier(.32,.72,0,1) both;padding:11px 13px;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 8%,transparent);border:1px solid transparent}',
+  '@keyframes rsc-row-out{from{opacity:1}to{opacity:.18}}',
+  '@keyframes rsc-leave-line{from{transform:scaleX(1)}to{transform:scaleX(0)}}',
+  '.rsc-item{position:relative;overflow:hidden;animation:rsc-row-in 300ms cubic-bezier(.32,.72,0,1) both;padding:11px 13px;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 8%,transparent);border:1px solid transparent}',
+  '.rsc-item[data-leaving]{animation:rsc-row-out 3200ms linear forwards}',
+  '.rsc-item[data-leaving]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--dsw-alias-status-error,#e5484d);transform-origin:left center;animation:rsc-leave-line 3200ms linear forwards}',
   '.rsc-item[data-tone=good]{border-color:color-mix(in srgb,#3fbf6f 45%,transparent)}',
   '.rsc-item[data-tone=bad]{opacity:.72}',
   '.rsc-item[data-click]{cursor:pointer}',
@@ -237,6 +239,8 @@ return {
         status_discarded: 'discarded',
         status_finished: 'finished',
         status_error: 'error',
+        'status_pending-discard': 'thinking',
+        status_pinned: 'watching',
       },
       zh: {
         title: '灰度侦察',
@@ -312,6 +316,8 @@ return {
         status_discarded: '已丢弃',
         status_finished: '已结束',
         status_error: '出错',
+        'status_pending-discard': '思考中',
+        status_pinned: '看着',
       },
     };
     let t = function (key, params) {
@@ -370,14 +376,18 @@ return {
       const clickable = !!a.sessionId && !a.deleted && sessions;
       const hits = a.hits || {};
       const hitKeys = Object.keys(hits);
+      const leaving = a.status === 'pending-discard' && !a.pinned;
       return React.createElement('div', {
         className: 'rsc-item',
         'data-id': a.id,
-        'data-leaving': a.verdict === 'old' && a.endedAt ? '' : undefined,
+        'data-leaving': leaving ? '' : undefined,
         'data-tone': tone,
         'data-click': clickable || undefined,
         title: clickable ? t('openSession') : undefined,
+        onMouseEnter: props.onHold ? function () { props.onHold(a.id); } : undefined,
+        onMouseLeave: props.onRelease ? function () { props.onRelease(a.id); } : undefined,
         onClick: clickable ? function () {
+          if (props.onPin) props.onPin(a.id);
           sessions.open(a.sessionId);
           openStore.set(false);
         } : undefined,
@@ -423,7 +433,10 @@ return {
     function ProbeQueue(props) {
       return React.createElement('div', { className: 'rsc-list' },
         props.attempts.map(function (a) {
-          return React.createElement(AttemptCard, { key: a.id, attempt: a, config: props.config });
+          return React.createElement(AttemptCard, {
+            key: a.id, attempt: a, config: props.config,
+            onHold: props.onHold, onRelease: props.onRelease, onPin: props.onPin,
+          });
         })
       );
     }
@@ -492,14 +505,10 @@ return {
       const best = attempts.reduce(function (m, a) {
         return typeof a.score === 'number' && a.score > m ? a.score : m;
       }, 0);
-      // Discarded probes leave the queue, but not instantly: a verdict can land
-      // in under two seconds, and vanishing on the same tick makes the run look
-      // like nothing happened. They fade out over LINGER_MS first.
-      const now = Date.now();
       const queue = attempts
         .filter(function (a) {
-          if (a.verdict !== 'old' && a.status !== 'discarded') return true;
-          return !a.endedAt || (now - a.endedAt) < LINGER_MS;
+          if (a.pinned || a.status === 'pending-discard') return true;
+          return a.status !== 'discarded';
         });
       const liveCount = remote ? remote.active : 0;
 
@@ -664,7 +673,12 @@ return {
             queue.length === 0
               ? React.createElement('div', { className: 'rsc-empty' },
                 discarded > 0 ? t('emptyAllDiscarded', { count: discarded }) : t('empty'))
-              : React.createElement(ProbeQueue, { attempts: queue, config: config })
+              : React.createElement(ProbeQueue, {
+                attempts: queue, config: config,
+                onHold: function (id) { call('hold', { id: id }); },
+                onRelease: function (id) { call('release', { id: id }); },
+                onPin: function (id) { call('pin', { id: id }); },
+              })
           )
         )
       );

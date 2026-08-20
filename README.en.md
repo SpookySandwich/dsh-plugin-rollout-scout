@@ -60,11 +60,11 @@ A pill sits at the bottom-right of the window and opens a full-frame console.
 
 **Left** — the probe prompt, model (default V4-Pro / High), concurrency, folder, the scoring thresholds, and toggles: auto-pause on a strong match, discard Chinese reasoning, delete old-model probes from disk.
 
-**Right** — launched / live / kept / discarded / best score, above a queue **ranked by confidence**, highest first. Rows animate to their new position as scores move. Each shows a score meter with both thresholds marked, the phrases it matched, and a preview of the reasoning. Click a row to open that conversation.
+**Right** — launched / live / kept / discarded / best score, above a queue in launch order that never jumps. Each row has a score meter, matched phrases, and a preview. Click a card to open the conversation — it keeps running. Hover means you need it: putting the mouse on a fading card rescues it.
 
 **Start** becomes **Pause**, which stops launching while letting probes already in flight reach their own verdict, then **Resume**. **Force stop** aborts everything mid-thought.
 
-Discarded probes fade out of the queue but stay in the count. The list is in launch order and is never resorted, so a card stays where it is.
+A probe judged old fades for about 3 seconds (a thin line at the bottom of the card) while the turn is still running, then cancels. Hover or click during the fade keeps it.
 
 **Clear finished** removes completed probes from the list *and* deletes those conversations from disk. **Delete all sessions** wipes every probe in the folder — including ones already cleared from the list — and resets numbering so the next run starts at probe 1.
 
