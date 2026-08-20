@@ -4,20 +4,39 @@ English | [中文](./README.md)
 
 A rollout-model fisher for DeepSeek Harness. When the provider does a limited rollout of a stronger conversation model, it may only surface in random new sessions. This plugin launches a batch of short probe conversations concurrently, reads their chain-of-thought **live**, and judges each by phrasing:
 
-- Reasoning that keeps saying **"Let me"** → likely the old model → **cancelled and discarded immediately** (no quota wasted finishing it).
-- Reasoning rich in **"I'm" / "I need" / "For"** → likely the rollout model → **allowed to finish its turn** and kept for you.
+- Strong old-model tells: **"Let me"** and **"We need"**, counted at **double weight**.
+- Rollout tells: **"I'm"**, **"I need"**, **"For"**.
 
-> ⚠️ These phrase signals are heuristics, not an official criterion — they just reflect differences in chain-of-thought style between models. Every threshold is adjustable.
+### Confidence score
+
+Every probe carries a 0–100% rollout confidence:
+
+```
+score = (weighted positive + 1) / (total weighted evidence + 2)
+```
+
+The add-one prior (Laplace smoothing) means **the score stays near 50% while evidence is thin**, so a single stray phrase never produces a confident verdict. For example:
+
+| Evidence | Score | Meaning |
+| --- | --- | --- |
+| none | 50% | can't tell |
+| 1 × "Let me" | 25% | discard now |
+| 1 positive / 10 negative | 15% | clearly not the rollout |
+| 3 positive / 0 negative | 80% | keep it |
+
+Below `discard below` (default 0.35) the turn is **cancelled mid-thought and discarded** (no quota wasted finishing it); above `keep above` (default 0.7) it is **allowed to finish and kept**. Both require `min. evidence` (default 2) to have accumulated first, so one word cannot decide the outcome.
+
+> ⚠️ These phrase signals are heuristics, not an official criterion — they just reflect differences in chain-of-thought style between models. Weights and thresholds are adjustable.
 
 ## Interface
 
-A "Scout" capsule sits at the bottom-right; it opens a glass control panel:
+A "Rollout Scout" entry sits at the bottom of the sidebar and opens a **full-screen console**:
 
-- **Probe prompt**, **model** (default V4-Pro / High), **concurrency**, **folder** for probe sessions.
-- Thresholds: `discard at "Let me" ×N`, `keep at signals ×N`, `max probes`.
-- Toggles: `stop after first catch`, `auto-delete old-model probes` (removes the session log from disk).
-- **Start / Stop / Clear.** After Stop, in-flight probes run to their own verdict; only new launches cease.
-- The queue below shows each probe's live status, `Let me` count, signal count, reasoning length and preview; click any row to open that session.
+- Left column: **probe prompt**, **model** (default V4-Pro / High), **concurrency**, **max probes**, **folder**, plus the scoring thresholds and toggles (`stop after first catch`, `auto-delete old-model probes`).
+- Right column: headline stats (launched / live / kept / discarded / best score) above the probe queue — each probe shows a **score meter** with both threshold marks, the phrases it matched (colour-coded for and against), status, and a reasoning preview; click any probe to open that conversation.
+- **Start / Stop / Clear finished.** After Stop, in-flight probes run to their own verdict; only new launches cease.
+
+The interface follows DSH's display language (English / 中文).
 
 ## How it works
 
