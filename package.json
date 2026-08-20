@@ -1,0 +1,45 @@
+{
+  "name": "dsh-plugin-rollout-scout",
+  "version": "0.1.0",
+  "description": "Fish for limited-rollout models in DeepSeek Harness: launch concurrent probe conversations, classify their live chain-of-thought by phrase signals, discard old-model probes instantly, and keep confident rollout catches.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "plugin.client.js"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SpookySandwich/dsh-plugin-rollout-scout.git"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis-plugin",
+    "rollout",
+    "ab-test",
+    "model-detection"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  }
+}
