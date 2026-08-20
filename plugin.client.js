@@ -175,6 +175,7 @@ return {
         setup: 'Probe setup',
         scoring: 'Scoring',
         prompt: 'Probe prompt',
+        promptPlaceholder: 'Ask something that makes it reason at length',
         model: 'Model',
         effort: 'Reasoning effort',
         concurrency: 'Concurrency',
@@ -243,6 +244,7 @@ return {
         setup: '探测设置',
         scoring: '评分',
         prompt: '探测提示词',
+        promptPlaceholder: '写一个能让它充分推理的问题',
         model: '模型',
         effort: '思考强度',
         concurrency: '并发数',
@@ -536,6 +538,7 @@ return {
             React.createElement(Field, { label: t('prompt') },
               React.createElement('textarea', {
                 className: 'rsc-area', value: val('prompt'), disabled: running,
+                placeholder: t('promptPlaceholder'),
                 onChange: function (e) { patch('prompt', e.target.value); },
               })
             ),
@@ -634,7 +637,8 @@ return {
                   onClick: function () { call('pause'); },
                 }, t('pause'))
                 : React.createElement('button', {
-                  type: 'button', className: 'rsc-btn', 'data-primary': '', disabled: !remote,
+                  type: 'button', className: 'rsc-btn', 'data-primary': '',
+                  disabled: !remote || String(val('prompt') || '').trim() === '',
                   onClick: function () {
                     // Resume keeps the run and its config; Start begins a new one.
                     if (paused) call('resume');

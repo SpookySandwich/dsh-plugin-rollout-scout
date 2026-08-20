@@ -1,62 +1,89 @@
 # dsh-plugin-rollout-scout
 
-English | [中文](./README.md)
+English | [简体中文](README.md)
 
-A rollout-model fisher for DeepSeek Harness. When the provider does a limited rollout of a stronger conversation model, it may only surface in random new sessions. This plugin launches a batch of short probe conversations concurrently, reads their chain-of-thought **live**, and judges each by phrasing:
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.7-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
-- Strong old-model tells: **"Let me"** and **"We need"**, counted at **double weight**.
-- A **Chinese chain-of-thought** is discarded on sight, whatever the score (toggle, on by default).
-- Rollout tells: **"I'm"**, **"I need"**, **"For"**.
+Providers sometimes roll a new conversation model out gradually, so which one you get is luck of the draw. Rollout Scout opens throwaway conversations on your own account, reads each one's chain-of-thought **as it streams**, and scores how the reasoning is written — cancelling the ones that read like the model you already have, and keeping the ones that don't.
 
-### Confidence score
+It is a curiosity tool built on phrase heuristics, not an oracle. Everything it does, you could do by hand: start a chat, glance at the reasoning, close the tab.
 
-Every probe carries a 0–100% rollout confidence:
+## How it decides
+
+The signal is in **how each paragraph opens** — not how often a phrase appears overall. A running tally of "Let me" drifts negative with length alone, so a long, perfectly good chain-of-thought eventually accumulates enough of them to look bad. Counting openings keeps the measure per-paragraph.
+
+Only the first 48 characters of a paragraph are ever read. The phrase rarely sits at character zero:
+
+> **The directory is empty. Let me create** a 3D cyberpunk scene.
+> **To avoid conflicts, I'll keep** I18n.cs edits under one change.
+
+Two signals are decisive, and they are deliberately **asymmetric**:
+
+| Signal | Effect |
+| --- | --- |
+| `Let me` opening any paragraph | Old model — cancel the turn immediately |
+| `I'll` opening the **whole** chain-of-thought | Rollout model — let it finish and keep it |
+
+`I'll` counts as proof only at the very start, because old-model reasoning happily opens a *middle* paragraph with "I'll create a single HTML file…" and then says "Let me build…" three paragraphs later. Treating every `I'll` as proof produced false positives.
+
+When neither fires, the remaining openings feed a score:
 
 ```
-score = (weighted positive + 1) / (total weighted evidence + 2)
+confidence = (positive openings + 1) / (classified openings + 2)
 ```
 
-The add-one prior (Laplace smoothing) means **the score stays near 50% while evidence is thin**, so a single stray phrase never produces a confident verdict. For example:
+Positive openings are the first-person planning voice — `I'm`, `I am`, `I've`, `I have`, `I need`, `I think`, `I also`, `I will`, and a leading `For`. Negative openings are `Let's`, `We need`, `We should`, and friends. The add-one prior keeps a thin sample near 50% instead of swinging to a confident verdict off one word:
 
-| Evidence | Score | Meaning |
+| Evidence | Confidence | Verdict |
 | --- | --- | --- |
-| none | 50% | can't tell |
-| 1 × "Let me" | 25% | discard now |
-| 1 positive / 10 negative | 15% | clearly not the rollout |
-| 3 positive / 0 negative | 80% | keep it |
+| nothing yet | 50% | keep watching |
+| 1 positive, 10 negative | 15% | discard |
+| 5 positive, 0 negative | 86% | keep |
 
-Below `discard below` (default 0.35) the turn is **cancelled mid-thought and discarded** (no quota wasted finishing it); above `keep above` (default 0.7) it is **allowed to finish and kept**. Both require `min. evidence` (default 2) to have accumulated first, so one word cannot decide the outcome.
+A probe is discarded below `discard below` (0.35) and kept above `keep above` (0.7), but only once `min. openings` (4) have been classified. One that opens ten paragraphs without a single positive is given up on, and a chain-of-thought that is **mostly Chinese** (80%+ of its letters) is discarded on sight — quoting a Chinese prompt inside English reasoning does not count.
 
-> ⚠️ These phrase signals are heuristics, not an official criterion — they just reflect differences in chain-of-thought style between models. Weights and thresholds are adjustable.
+The classifier is covered by tests over hand-labelled transcripts:
 
-## Interface
+```bash
+npm test
+```
 
-A "Rollout Scout" entry sits at the bottom of the sidebar and opens a **full-screen console**:
+## The console
 
-- Left column: **probe prompt**, **model** (default V4-Pro / High), **concurrency**, **folder**, plus the scoring thresholds and toggles (`stop after first catch`, `discard Chinese chain-of-thought`, `auto-delete old-model probes`). Probing runs until you stop it — there is no probe cap.
-- Right column: headline stats (launched / live / kept / discarded / best score) above the probe queue. The queue is **ranked by confidence**, highest first, and rows **animate to their new position** as scores move. Discarded probes **leave the queue** (they stay in the Discarded count). Each row shows a **score meter** with both threshold marks, the phrases it matched (colour-coded for and against), status, and a reasoning preview; **click a row to open that conversation**.
-- **Start** becomes **Stop** while running: Stop halts new launches and lets in-flight probes reach their own verdict. **Force stop** additionally aborts every conversation still in flight. **Clear finished** empties the history.
+A pill sits at the bottom-right of the window and opens a full-frame console.
 
-The interface follows DSH's display language (English / 中文).
+**Left** — the probe prompt, model (default V4-Pro / High), concurrency, folder, the scoring thresholds, and three toggles: auto-pause on a strong match, discard Chinese reasoning, delete old-model probes from disk.
 
-## How it works
+**Right** — launched / live / kept / discarded / best score, above a queue **ranked by confidence**, highest first. Rows animate to their new position as scores move. Each shows a score meter with both thresholds marked, the phrases it matched, and a preview of the reasoning. Click a row to open that conversation.
 
-- The host half serves `/rollout-scout` and creates brand-new sessions from scratch with `ctx.agents.create` (no seed), setting model and reasoning effort via `installModelSelection`.
-- It subscribes to `session/event` scoped to each probe agent, reads `reasoning-delta` chunks from `assistant/chunk` (the streaming chain-of-thought), accumulates them and classifies on the fly.
-- On an old-model hit it calls `agent.cancel` to interrupt the turn; on a rollout hit it lets the turn reach `turn/end`.
-- All probe sessions are created under the folder you choose (as one workspace), with optional auto-deletion of probes judged old-model.
+**Start** becomes **Pause**, which stops launching while letting probes already in flight reach their own verdict, then **Resume**. **Force stop** aborts everything mid-thought. Discarded probes fade out of the queue but stay in the count.
+
+The run lives on the host, so it keeps going when you close the console — the pill reports live and tried counts, turns green with a badge when something is caught, and shows the best confidence so far on hover.
 
 ## Install
 
-```
-dsh plugin add dsh-plugin-rollout-scout
+```bash
+dsh plugin --profile web add dsh-plugin-rollout-scout
 ```
 
-Restart DSH after installing (the host half loads with the server).
+Restart DSH afterwards: the host half loads with the server. The interface follows DSH's display language (English / 中文).
+
+## How it works
+
+- The host half serves `/rollout-scout` and creates each probe as a brand-new session with `ctx.agents.create` (no seed), setting model and reasoning effort through `installModelSelection`.
+- It subscribes to `session/event` scoped to that one agent and reads `reasoning-delta` chunks off `assistant/chunk` — the chain-of-thought as it streams — classifying on every chunk.
+- A verdict against calls `agent.cancel` to interrupt the turn; a verdict for lets it run to `turn/end`. While streaming, the last paragraph is withheld because its opening may be half-written; at turn end the complete text is re-classified.
+- Probes are created in the folder you choose, which becomes a workspace. Old-model probes can be deleted from disk.
 
 ## Compatibility
 
-The UI lives on the global `shell.overlay` layer and conflicts with no per-session plugin; it follows DSH's display language. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-smooth-motion](https://github.com/SpookySandwich/dsh-plugin-smooth-motion) and [dsh-plugin-message-tree](https://github.com/SpookySandwich/dsh-plugin-message-tree).
+The UI lives on the frame-wide `shell.overlay` layer and conflicts with no per-session plugin. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-smooth-motion](https://github.com/SpookySandwich/dsh-plugin-smooth-motion) and [dsh-plugin-message-tree](https://github.com/SpookySandwich/dsh-plugin-message-tree).
+
+## A note on cost
+
+Every probe is a real turn against your own quota. Discarded ones are cancelled within a second or two, but a run left going will keep launching until you stop it. Concurrency and the thresholds are yours to tune.
 
 ## License
 
