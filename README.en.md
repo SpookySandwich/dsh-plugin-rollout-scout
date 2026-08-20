@@ -34,7 +34,9 @@ When neither fires, the remaining openings feed a score:
 confidence = (positive openings + 1) / (classified openings + 2)
 ```
 
-Positive openings are the first-person planning voice — `I'm`, `I am`, `I've`, `I have`, `I need`, `I think`, `I also`, `I will`, and a leading `For`. Negative openings are `Let's`, `We need`, `We should`, and friends. The add-one prior keeps a thin sample near 50% instead of swinging to a confident verdict off one word:
+A paragraph opening is scored as soon as 48 characters have arrived, even if the model never inserts a newline. A first paragraph already speaking as `we` / `we need` / `we will` is decisive against, same class of tell as `Let me`. A probe that **finishes** without a keep is discarded — the 50% gray zone is only for live probes still gathering openings.
+
+Positive openings are the first-person **singular** planning voice — `I'm`, `I am`, `I've`, `I have`, `I need`, `I think`, `I also`, `I will`, and a leading `For`. Negative openings are `Let me` / `Let's` and **any** first-person plural in the opening (`we`, `we need`, `we will`, `we'll`, …). The rollout model reasons in "I", not "we". The add-one prior keeps a thin sample near 50% instead of swinging to a confident verdict off one word:
 
 | Evidence | Confidence | Verdict |
 | --- | --- | --- |
@@ -59,6 +61,8 @@ A pill sits at the bottom-right of the window and opens a full-frame console.
 **Right** — launched / live / kept / discarded / best score, above a queue **ranked by confidence**, highest first. Rows animate to their new position as scores move. Each shows a score meter with both thresholds marked, the phrases it matched, and a preview of the reasoning. Click a row to open that conversation.
 
 **Start** becomes **Pause**, which stops launching while letting probes already in flight reach their own verdict, then **Resume**. **Force stop** aborts everything mid-thought. Discarded probes fade out of the queue but stay in the count.
+
+**Clear finished** removes completed probes from the list *and* deletes those conversations from disk. **Delete all sessions** wipes every probe in the folder — including ones already cleared from the list — and resets numbering so the next run starts at probe 1.
 
 The run lives on the host, so it keeps going when you close the console — the pill reports live and tried counts, turns green with a badge when something is caught, and shows the best confidence so far on hover.
 

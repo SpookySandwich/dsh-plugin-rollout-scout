@@ -189,17 +189,20 @@ return {
         forceStopHint: 'Stop launching and abort every conversation still in flight.',
         discardChinese: 'Discard when the chain-of-thought is mostly Chinese (80%+)',
         chineseCot: 'Chinese CoT',
-        scoringHint: 'A paragraph opening with “I’ll” is decisive for the rollout model; one opening with “Let me” is decisive against — whichever appears first settles it. Otherwise the score is the share of classified openings reading as the rollout (“I am”, “I’m”, “I need”, “For”), acted on only once enough openings exist. A probe that opens this many paragraphs without a single positive one is given up on.',
+        scoringHint: 'A paragraph opening with “I’ll” is decisive for the rollout model; “Let me”, or a first paragraph already speaking as “we” / “we need” / “we will”, is decisive against. Openings are scored as soon as 48 characters have arrived — a single block of reasoning no longer sits at 50% until the turn ends. A probe that finishes without a keep is discarded.',
         reason_decisive: 'decisive opening',
         reason_score: 'opening score',
         reason_window: 'no positive opening',
         reason_chinese: 'Chinese CoT',
+        reason_ended: 'finished without a keep',
         autoPauseOnMatch: 'Auto-pause on a strong match',
         autoDelete: 'Delete old-model probes from disk',
         start: 'Start',
         pause: 'Pause',
         resume: 'Resume',
         clear: 'Clear finished',
+        deleteAll: 'Delete all sessions',
+        deleteAllHint: 'Remove every probe conversation from disk — including ones already cleared from this list — and reset numbering to 1.',
         effortDefault: 'Provider default',
         statLaunched: 'Launched',
         statActive: 'Live',
@@ -258,17 +261,20 @@ return {
         forceStopHint: '停止发起，并中止所有进行中的会话。',
         discardChinese: '思维链以中文为主（80% 以上）时丢弃',
         chineseCot: '中文思维链',
-        scoringHint: '段落以「I’ll」开头即判定为灰度模型，以「Let me」开头即判定为旧模型——以先出现者为准。两者都没出现时，按已分类段落开头中读作灰度风格（「I am」「I’m」「I need」「For」）的比例打分，且开头数量足够后才据此判定。若在设定的段数内一个正向开头都没有出现，则放弃该探测。',
+        scoringHint: '段落以「I’ll」开头即判定为灰度模型；以「Let me」开头，或第一段已经在说「we / we need / we will」，即判定为旧模型。开头写满 48 个字符就会打分——整段没有换行也不会一直停在 50%。一轮结束时仍未命中灰度的，一律丢弃。',
         reason_decisive: '决定性开头',
         reason_score: '开头评分',
         reason_window: '无正向开头',
         reason_chinese: '中文思维链',
+        reason_ended: '结束时未命中',
         autoPauseOnMatch: '命中强匹配时自动暂停',
         autoDelete: '从磁盘删除判为旧模型的会话',
         start: '开始',
         pause: '暂停',
         resume: '继续',
         clear: '清空已结束',
+        deleteAll: '删除全部会话',
+        deleteAllHint: '从磁盘删除所有探测会话（包括已经从列表清掉的），并把编号从 1 重新计。',
         effortDefault: '服务商默认',
         statLaunched: '已发起',
         statActive: '进行中',
@@ -392,10 +398,12 @@ return {
           hitKeys.length === 0 && !a.chinese
             ? React.createElement('span', { className: 'rsc-chip' }, t('evidenceNone'))
             : hitKeys.map(function (k) {
-              const negative = k === 'let me' || k === 'we need';
+              const hit = hits[k];
+              const count = hit && typeof hit === 'object' ? hit.count : hit;
+              const sign = hit && typeof hit === 'object' && hit.sign === 'neg' ? 'neg' : 'pos';
               return React.createElement('span', {
-                key: k, className: 'rsc-chip', 'data-sign': negative ? 'neg' : 'pos',
-              }, k + ' ×' + hits[k]);
+                key: k, className: 'rsc-chip', 'data-sign': sign,
+              }, k + ' ×' + count);
             })
         ),
         a.error ? React.createElement('div', { className: 'rsc-error' }, a.error) : null,
@@ -655,6 +663,15 @@ return {
                 onClick: function () { call('clear'); },
               }, t('clear'))
             ),
+            React.createElement('div', { className: 'rsc-actions' },
+              React.createElement('button', {
+                type: 'button', className: 'rsc-btn', 'data-danger': '',
+                disabled: running,
+                title: t('deleteAllHint'),
+                onClick: function () { call('delete-all'); },
+              }, t('deleteAll'))
+            ),
+            React.createElement('div', { className: 'rsc-hint' }, t('deleteAllHint')),
             note ? React.createElement('div', { className: 'rsc-note' }, note) : null,
             error ? React.createElement('div', { className: 'rsc-error' }, error) : null
           ),

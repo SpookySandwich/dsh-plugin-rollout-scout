@@ -25,7 +25,9 @@ function verdict(text) {
     if (r.score >= CONFIG.keepAbove) return 'keep';
   }
   if (r.paragraphs >= CONFIG.paragraphWindow && r.positive === 0) return 'discard';
-  return 'inconclusive';
+  // A completed turn that was not kept is discarded — the gray zone is
+  // only for live probes still gathering openings.
+  return 'discard';
 }
 
 // ---------------------------------------------------------------- samples --
@@ -103,6 +105,22 @@ const chineseThinking = `用户想知道三十四乘以二十七等于多少。�
 
 先算三十四乘以二十，得到六百八十。然后算三十四乘以七。`;
 
+// Old model: first-person plural openings. "We need" / "We will" are not
+// rollout signals — the new model uses "I", not "we".
+const weNeedOpenings = `We need to split this into two patches so the chart work stays isolated.
+
+We will keep the first change scoped to the view models only.
+
+We should also update the tests for the money path.
+
+We're going to leave the ranking as a stable base.`;
+
+// Single blob, no newlines — the live UI case: 700 chars of "We need…"
+// with 0 paragraphs on screen because streaming used to drop the only one.
+const weNeedBlob = 'We need respond in Chinese. User asks "做一个 3D 赛博朋克场景" meaning make a 3D cyberpunk scene. We need infer they want app in current directory. We can create HTML/JS.';
+
+const blandFinished = `The user wants a 3D cyberpunk scene. This is a creative coding task in the current working directory as a single HTML file.`;
+
 const cases = [
   ['LABELLED new model', newModel, 'keep'],
   ['LABELLED old model', oldModel, 'discard'],
@@ -111,6 +129,9 @@ const cases = [
   ['CoT opening with I-will', opensWithIll, 'keep'],
   ['English quoting Chinese', englishQuotingChinese, 'keep'],
   ['reasoning in Chinese', chineseThinking, 'discard'],
+  ['We need / We will openings', weNeedOpenings, 'discard'],
+  ['single-blob We need (no newlines)', weNeedBlob, 'discard'],
+  ['finished with no I/we signal', blandFinished, 'discard'],
 ];
 
 let failed = 0;
@@ -125,5 +146,33 @@ for (const [name, text, expected] of cases) {
     `score=${r.score.toFixed(2)} zh=${Math.round(chineseShare(text) * 100)}%  ${name}`,
   );
 }
+const liveBlob = classify(weNeedBlob, false);
+if (liveBlob.paragraphs !== 1 || liveBlob.decisive !== 'old' || liveBlob.negative < 1) {
+  failed += 1;
+  console.log(
+    `FAIL  streaming blob  paras=${liveBlob.paragraphs} decisive=${liveBlob.decisive} -${liveBlob.negative}  want paras=1 decisive=old negative>=1`,
+  );
+} else {
+  console.log('PASS  streaming We-need blob is classified before the turn ends');
+}
+
+const shortLive = classify('We need', false);
+if (shortLive.paragraphs !== 0) {
+  failed += 1;
+  console.log(`FAIL  short streaming opening counted paras=${shortLive.paragraphs} want 0`);
+} else {
+  console.log('PASS  streaming opening withheld until 48 characters');
+}
+
+const weHits = classify(weNeedOpenings, true).hits;
+for (const [phrase, hit] of Object.entries(weHits)) {
+  if (!hit || hit.sign !== 'neg') {
+    failed += 1;
+    console.log(`FAIL  hit "${phrase}" sign=${hit && hit.sign} want neg`);
+  } else {
+    console.log(`PASS  hit "${phrase}" ×${hit.count} sign=neg`);
+  }
+}
+
 console.log(`\n${cases.length - failed}/${cases.length} passed`);
 process.exit(failed === 0 ? 0 : 1);
