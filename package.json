@@ -41,5 +41,8 @@
       "platform": "web",
       "inject": []
     }
+  },
+  "scripts": {
+    "test": "node test/classifier.test.mjs"
   }
 }
