@@ -196,6 +196,8 @@ return {
         reason_chinese: 'Chinese CoT',
         reason_ended: 'finished without a keep',
         autoPauseOnMatch: 'Auto-pause on a strong match',
+        autoDiscard: 'Auto-discard probes judged as the old model',
+        autoDiscardHint: 'Off: flag them and let the turn finish so you can open a suspected false negative.',
         autoDelete: 'Delete old-model probes from disk',
         start: 'Start',
         pause: 'Pause',
@@ -268,6 +270,8 @@ return {
         reason_chinese: '中文思维链',
         reason_ended: '结束时未命中',
         autoPauseOnMatch: '命中强匹配时自动暂停',
+        autoDiscard: '自动丢弃判为旧模型的探测',
+        autoDiscardHint: '关闭后只标记、不中止，方便打开检查是否误杀。',
         autoDelete: '从磁盘删除判为旧模型的会话',
         start: '开始',
         pause: '暂停',
@@ -367,7 +371,7 @@ return {
       return React.createElement('div', {
         className: 'rsc-item',
         'data-id': a.id,
-        'data-leaving': a.verdict === 'old' && a.endedAt ? '' : undefined,
+        'data-leaving': a.verdict === 'old' && a.endedAt && !(props.config && props.config.autoDiscard === false) ? '' : undefined,
         'data-tone': tone,
         'data-click': clickable || undefined,
         title: clickable ? t('openSession') : undefined,
@@ -522,6 +526,7 @@ return {
       const queue = attempts
         .filter(function (a) {
           if (a.verdict !== 'old') return true;
+          if (config && config.autoDiscard === false) return true;
           return !a.endedAt || (now - a.endedAt) < LINGER_MS;
         })
         .sort(function (a, b) { return (b.score - a.score) || (b.id - a.id); });
@@ -633,6 +638,16 @@ return {
               }),
               React.createElement('span', null, t('discardChinese'))
             ),
+            React.createElement('label', { className: 'rsc-check' },
+              React.createElement('input', {
+                type: 'checkbox',
+                checked: form.autoDiscard !== undefined ? !!form.autoDiscard : (config ? config.autoDiscard !== false : true),
+                disabled: running,
+                onChange: function (e) { patch('autoDiscard', e.target.checked); },
+              }),
+              React.createElement('span', null, t('autoDiscard'))
+            ),
+            React.createElement('div', { className: 'rsc-hint' }, t('autoDiscardHint')),
             React.createElement('label', { className: 'rsc-check' },
               React.createElement('input', {
                 type: 'checkbox', checked: !!val('autoDelete'), disabled: running,

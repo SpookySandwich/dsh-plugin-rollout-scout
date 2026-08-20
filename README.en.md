@@ -56,7 +56,7 @@ npm test
 
 A pill sits at the bottom-right of the window and opens a full-frame console.
 
-**Left** — the probe prompt, model (default V4-Pro / High), concurrency, folder, the scoring thresholds, and three toggles: auto-pause on a strong match, discard Chinese reasoning, delete old-model probes from disk.
+**Left** — the probe prompt, model (default V4-Pro / High), concurrency, folder, the scoring thresholds, and toggles: auto-pause on a strong match, discard Chinese reasoning, auto-discard (cancel probes judged old — turn this off to inspect possible false negatives), delete old-model probes from disk.
 
 **Right** — launched / live / kept / discarded / best score, above a queue **ranked by confidence**, highest first. Rows animate to their new position as scores move. Each shows a score meter with both thresholds marked, the phrases it matched, and a preview of the reasoning. Click a row to open that conversation.
 
