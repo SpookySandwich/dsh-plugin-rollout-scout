@@ -10,6 +10,8 @@ Providers sometimes roll a new conversation model out gradually, so which one yo
 
 It is a curiosity tool built on phrase heuristics, not an oracle. Everything it does, you could do by hand: start a chat, glance at the reasoning, close the tab.
 
+![the console](https://raw.githubusercontent.com/SpookySandwich/dsh-plugin-rollout-scout/master/assets/console.png)
+
 ## How it decides
 
 The signal is in **how each paragraph opens** — not how often a phrase appears overall. A running tally of "Let me" drifts negative with length alone, so a long, perfectly good chain-of-thought eventually accumulates enough of them to look bad. Counting openings keeps the measure per-paragraph.
@@ -56,7 +58,7 @@ npm test
 
 ## The console
 
-A pill sits at the bottom-right of the window and opens a full-frame console.
+A pill sits at the bottom-right of the window and opens the full-frame console shown above.
 
 **Left** — the probe prompt, model (default V4-Pro / High), concurrency, folder, the scoring thresholds, and toggles: auto-pause on a strong match, discard Chinese reasoning, delete old-model probes from disk.
 
