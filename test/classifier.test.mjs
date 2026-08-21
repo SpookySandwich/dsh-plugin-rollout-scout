@@ -3,7 +3,9 @@
 // and labelled by hand.
 //
 //   node test/classifier.test.mjs
-import { classify, chineseShare } from '../lib/index.js';
+import os from 'node:os';
+import path from 'node:path';
+import { classify, chineseShare, sanitizeConfig } from '../lib/index.js';
 
 const CONFIG = {
   discardBelow: 0.35,
@@ -175,10 +177,22 @@ const cases = [
 ];
 
 let failed = 0;
+// Counted separately from `cases`: the assertions below the table are checks
+// too, and folding them into the case count printed a denominator that did
+// not match what actually ran.
+let checks = 0;
+
+function check(ok, message) {
+  checks += 1;
+  if (!ok) failed += 1;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${message}`);
+}
+
 for (const [name, text, expected] of cases) {
   const got = verdict(text);
   const r = classify(text, true);
   const ok = got === expected;
+  checks += 1;
   if (!ok) failed += 1;
   console.log(
     `${ok ? 'PASS' : 'FAIL'}  ${got.padEnd(12)} want ${expected.padEnd(12)}`,
@@ -187,43 +201,70 @@ for (const [name, text, expected] of cases) {
   );
 }
 const liveBlob = classify(weNeedBlob, false);
-if (liveBlob.paragraphs !== 1 || liveBlob.negative < 1 || liveBlob.decisive === 'old') {
-  failed += 1;
-  console.log(
-    `FAIL  streaming blob  paras=${liveBlob.paragraphs} decisive=${liveBlob.decisive} -${liveBlob.negative}  want paras=1 negative>=1 not-decisive-old`,
-  );
-} else {
-  console.log('PASS  streaming We-need blob is scored negative without an instant kill');
-}
+check(
+  liveBlob.paragraphs === 1 && liveBlob.negative >= 1 && liveBlob.decisive !== 'old',
+  liveBlob.paragraphs === 1 && liveBlob.negative >= 1 && liveBlob.decisive !== 'old'
+    ? 'streaming We-need blob is scored negative without an instant kill'
+    : `streaming blob  paras=${liveBlob.paragraphs} decisive=${liveBlob.decisive} -${liveBlob.negative}  want paras=1 negative>=1 not-decisive-old`,
+);
 
 const shortLive = classify('We need', false);
-if (shortLive.paragraphs !== 0) {
-  failed += 1;
-  console.log(`FAIL  short streaming opening counted paras=${shortLive.paragraphs} want 0`);
-} else {
-  console.log('PASS  streaming opening withheld until 48 characters');
-}
+check(
+  shortLive.paragraphs === 0,
+  shortLive.paragraphs === 0
+    ? 'streaming opening withheld until 48 characters'
+    : `short streaming opening counted paras=${shortLive.paragraphs} want 0`,
+);
 
 const weHits = classify(weNeedOpenings, true).hits;
 for (const [phrase, hit] of Object.entries(weHits)) {
-  if (!hit || hit.sign !== 'neg') {
-    failed += 1;
-    console.log(`FAIL  hit "${phrase}" sign=${hit && hit.sign} want neg`);
-  } else {
-    console.log(`PASS  hit "${phrase}" ×${hit.count} sign=neg`);
-  }
+  check(
+    !!hit && hit.sign === 'neg',
+    hit && hit.sign === 'neg'
+      ? `hit "${phrase}" ×${hit.count} sign=neg`
+      : `hit "${phrase}" sign=${hit && hit.sign} want neg`,
+  );
 }
 
 const summarised = classify(weNeedThenIll, true);
-if (summarised.decisive === 'old') {
-  failed += 1;
-  console.log('FAIL  summariser CoT starting We need was decisive-old');
-} else if (verdict(weNeedThenIll) !== 'keep') {
-  failed += 1;
-  console.log(`FAIL  summariser CoT verdict=${verdict(weNeedThenIll)} want keep score=${summarised.score.toFixed(2)} +${summarised.positive} -${summarised.negative} regular=${summarised.regular}`);
-} else {
-  console.log(`PASS  summariser CoT We-need opener is keep (regular=${summarised.regular} score=${summarised.score.toFixed(2)})`);
+check(
+  summarised.decisive !== 'old' && verdict(weNeedThenIll) === 'keep',
+  summarised.decisive === 'old'
+    ? 'summariser CoT starting We need was decisive-old'
+    : verdict(weNeedThenIll) !== 'keep'
+      ? `summariser CoT verdict=${verdict(weNeedThenIll)} want keep score=${summarised.score.toFixed(2)} +${summarised.positive} -${summarised.negative} regular=${summarised.regular}`
+      : `summariser CoT We-need opener is keep (regular=${summarised.regular} score=${summarised.score.toFixed(2)})`,
+);
+
+// ------------------------------------------------------------ config guard --
+// `delete-all` removes every session attached to the probe folder, so a folder
+// that overlaps the harness state directory, the home directory or a drive
+// root has to be refused before a run can ever start.
+const OK_FOLDER = path.join(os.tmpdir(), 'rollout-scout-test');
+
+function rejects(folder, label) {
+  let threw = false;
+  try { sanitizeConfig({ prompt: 'x', folder }); } catch (e) { threw = e instanceof TypeError; }
+  check(threw, threw ? `folder refused: ${label}` : `folder ACCEPTED but should be refused: ${label}`);
 }
 
-console.log(`\n${cases.length - failed}/${cases.length} passed`);
+// The shipped default has to survive its own guard.
+const fallback = sanitizeConfig({ prompt: 'x' });
+check(path.isAbsolute(fallback.folder), `the default folder is accepted: ${fallback.folder}`);
+
+rejects(path.parse(os.homedir()).root, 'filesystem root');
+rejects(os.homedir(), 'home directory');
+rejects(path.join(os.homedir(), '.dsh'), 'harness state directory');
+rejects(path.join(os.homedir(), '.dsh', 'sessions'), 'inside the harness state directory');
+rejects('relative/path', 'relative path');
+
+const good = sanitizeConfig({ prompt: 'x', folder: OK_FOLDER, concurrency: 99, keepAbove: 0.8 });
+check(good.folder === path.resolve(OK_FOLDER), `folder accepted and resolved: ${good.folder}`);
+check(good.concurrency === 6, `concurrency clamped to ${good.concurrency} (max 6)`);
+
+let inverted = false;
+try { sanitizeConfig({ prompt: 'x', folder: OK_FOLDER, keepAbove: 0.5, discardBelow: 0.6 }); } catch (e) { inverted = true; }
+check(inverted, 'keepAbove below discardBelow is refused');
+
+console.log(`\n${checks - failed}/${checks} passed`);
 process.exit(failed === 0 ? 0 : 1);

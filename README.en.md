@@ -50,7 +50,7 @@ Positive openings are the first-person **singular** planning voice — `I'm`, `I
 
 A probe is discarded below `discard below` (0.35) and kept above `keep above` (0.7), but only once `min. openings` (4) have been classified. One that opens ten paragraphs without a single positive is given up on, and a chain-of-thought that is **mostly Chinese** (80%+ of its letters) is discarded on sight — quoting a Chinese prompt inside English reasoning does not count.
 
-The classifier is covered by tests over hand-labelled transcripts:
+The classifier is covered by tests over hand-labelled transcripts, alongside tests for the route guards, the launch loop's failure behaviour, and the rules about deleting sessions:
 
 ```bash
 npm test
@@ -70,15 +70,21 @@ A probe judged old fades for about 3 seconds (a thin line at the bottom of the c
 
 **Clear finished** removes completed probes from the list *and* deletes those conversations from disk. **Delete all sessions** wipes every probe in the folder — including ones already cleared from the list — and resets numbering so the next run starts at probe 1.
 
+Both refuse to touch a probe that is still streaming. Pause stops launching but leaves probes in flight, so **Delete all sessions** asks you to **Force stop** first rather than unlinking a log that is still being written to. The probe folder may not be your home directory, a drive root, or anywhere inside `~/.dsh` — deleting is scoped to that folder, and those would put unrelated conversations in its path.
+
+If three probes in a row fail to even start — provider unreachable, folder unwritable — the run stops itself and reports the error instead of relaunching into the same failure forever. **Resume** tries again.
+
 The run lives on the host, so it keeps going when you close the console — the pill reports live and tried counts, turns green with a badge when something is caught, and shows the best confidence so far on hover.
 
 ## Install
 
 ```bash
-dsh plugin --profile web add dsh-plugin-rollout-scout
+dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 ```
 
 Restart DSH afterwards: the host half loads with the server. The interface follows DSH's display language (English / 中文).
+
+Not on npm yet, so install from the repository. `lib/client.js` is a generated bundle but it is **committed**, so the install works without running any build step — `dsh plugin add` is pnpm underneath and does not run dependency lifecycle scripts by default. If you edit `plugin.client.js`, run `npm run build` to regenerate it (`npm test` does this too), and commit the result.
 
 ## How it works
 
@@ -86,6 +92,7 @@ Restart DSH afterwards: the host half loads with the server. The interface follo
 - It subscribes to `session/event` scoped to that one agent and reads `reasoning-delta` chunks off `assistant/chunk` — the chain-of-thought as it streams — classifying on every chunk.
 - A verdict against calls `agent.cancel` to interrupt the turn; a verdict for lets it run to `turn/end`. While streaming, the last paragraph is withheld because its opening may be half-written; at turn end the complete text is re-classified.
 - Probes are created in the folder you choose, which becomes a workspace. Old-model probes can be deleted from disk.
+- `/rollout-scout` listens on a local port, so it is guarded like one: writes require an `application/json` content type (which forces a CORS preflight that is never answered) and a cross-origin `Origin` is refused. A page you happen to be visiting cannot make it start or delete anything.
 
 ## Compatibility
 

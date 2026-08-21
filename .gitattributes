@@ -1,0 +1,4 @@
+# lib/client.js is generated and committed; CRLF conversion would make it look
+# modified on every fresh checkout and break `npm run check:client`.
+* text=auto eol=lf
+*.png binary
