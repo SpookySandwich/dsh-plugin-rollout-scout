@@ -58,7 +58,7 @@ npm test
 
 ## The console
 
-A pill sits at the bottom-right of the window and opens the full-frame console shown above.
+**Rollout Scout** sits at the sidebar foot, beside Settings, and opens the full-frame console shown above. It is a `sidebar.footer.action` entry, so it matches the shell's own rows and collapses to a single icon when the sidebar folds to the rail.
 
 **Left** — the probe prompt, model (default V4-Pro / High), concurrency, folder, the scoring thresholds, and toggles: auto-pause on a strong match, discard Chinese reasoning, delete old-model probes from disk.
 
@@ -74,7 +74,7 @@ Both refuse to touch a probe that is still streaming. Pause stops launching but 
 
 If three probes in a row fail to even start — provider unreachable, folder unwritable — the run stops itself and reports the error instead of relaunching into the same failure forever. **Resume** tries again.
 
-The run lives on the host, so it keeps going when you close the console — the pill reports live and tried counts, turns green with a badge when something is caught, and shows the best confidence so far on hover.
+The run lives on the host, so it keeps going when you close the console — the sidebar row carries a status pip on its icon (pulsing while scouting, grey when paused, green on a catch), a live count in the wide column, a green badge with the number caught, and the tried count and best confidence so far on hover. In the rail the pip is the whole signal, which is why it sits on the icon rather than in the label.
 
 ## Install
 
@@ -96,7 +96,7 @@ Not on npm yet, so install from the repository. `lib/client.js` is a generated b
 
 ## Compatibility
 
-The UI lives on the frame-wide `shell.overlay` layer and conflicts with no per-session plugin. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-smooth-motion](https://github.com/SpookySandwich/dsh-plugin-smooth-motion) and [dsh-plugin-message-tree](https://github.com/SpookySandwich/dsh-plugin-message-tree).
+The launcher takes a `sidebar.footer.action` seat (a list slot, so it sits beside any other footer action rather than displacing one) and the console renders on the frame-wide `shell.overlay` layer. Neither is per-session, so it conflicts with no session plugin. Requires a DSH whose sidebar declares that seat; without it the console has no way in. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-smooth-motion](https://github.com/SpookySandwich/dsh-plugin-smooth-motion) and [dsh-plugin-message-tree](https://github.com/SpookySandwich/dsh-plugin-message-tree).
 
 ## A note on cost
 

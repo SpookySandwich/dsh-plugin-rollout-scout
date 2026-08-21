@@ -58,7 +58,7 @@ npm test
 
 ## 控制台
 
-窗口右下角有一枚胶囊按钮，点开就是上图的整屏控制台。
+**灰度侦察** 位于侧边栏底部、「设置」旁边，点开就是上图的整屏控制台。它注册在 `sidebar.footer.action` 座位上，因此与外壳自带的条目样式一致；侧边栏收起为窄栏时，它也会收成一个图标。
 
 **左栏** —— 探测提示词、模型（默认 V4-Pro / High）、并发数、存放目录、评分阈值，以及开关：命中强匹配时自动暂停、思维链以中文为主时丢弃、从磁盘删除旧模型会话。
 
@@ -74,7 +74,7 @@ npm test
 
 若连续三个探测连启动都失败（服务不可达、目录不可写等），运行会自行停止并报出错误，而不是一直重复同一个失败。点 **继续** 可以重试。
 
-运行状态在宿主端，因此关掉控制台后仍会继续——胶囊会显示进行中与已试数量，命中后变绿并带角标，悬停可看目前最高置信度。
+运行状态在宿主端，因此关掉控制台后仍会继续——侧边栏那一行的图标上带一个状态小点（侦察中呼吸闪烁、暂停为灰、命中转绿），宽栏里还会显示进行中的数量、命中后带绿色角标，悬停可看已试数量与目前最高置信度。收成窄栏后只剩这个小点可看，所以它长在图标上而不是文字里。
 
 ## 安装
 
@@ -96,7 +96,7 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 
 ## 兼容性
 
-界面挂在全局 `shell.overlay` 层，不与任何会话内插件冲突。与 [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream)、[dsh-plugin-smooth-motion](https://github.com/SpookySandwich/dsh-plugin-smooth-motion)、[dsh-plugin-message-tree](https://github.com/SpookySandwich/dsh-plugin-message-tree) 同族。
+入口占用 `sidebar.footer.action` 座位（list 类型，会与其它底部操作并排，而不是把谁挤掉），控制台本体渲染在全局 `shell.overlay` 层。两者都不属于会话作用域，因此不与任何会话内插件冲突。需要侧边栏声明了该座位的 DSH 版本；否则控制台将没有入口。与 [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream)、[dsh-plugin-smooth-motion](https://github.com/SpookySandwich/dsh-plugin-smooth-motion)、[dsh-plugin-message-tree](https://github.com/SpookySandwich/dsh-plugin-message-tree) 同族。
 
 ## 关于额度
 
