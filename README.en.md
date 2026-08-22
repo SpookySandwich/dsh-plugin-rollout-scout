@@ -10,7 +10,7 @@ Providers sometimes roll a new conversation model out gradually, so which one yo
 
 It is a curiosity tool built on phrase heuristics, not an oracle. Everything it does, you could do by hand: start a chat, glance at the reasoning, close the tab.
 
-![the console](https://raw.githubusercontent.com/SpookySandwich/dsh-plugin-rollout-scout/master/assets/console.png)
+![the sidebar launcher](https://raw.githubusercontent.com/SpookySandwich/dsh-plugin-rollout-scout/master/assets/console.png)
 
 ## How it decides
 
@@ -58,7 +58,7 @@ npm test
 
 ## The console
 
-**Rollout Scout** sits at the sidebar foot, beside Settings, and opens the full-frame console shown above. It is a `sidebar.footer.action` entry, so it matches the shell's own rows and collapses to a single icon when the sidebar folds to the rail.
+**Rollout Scout** sits at the sidebar foot, beside Settings, and opens the full-frame console described below. It is a `sidebar.footer.action` entry, so it matches the shell's own rows and collapses to a single icon when the sidebar folds to the rail.
 
 **Left** — the probe prompt, model (default V4-Pro / High), concurrency, folder, the scoring thresholds, and toggles: auto-pause on a strong match, discard Chinese reasoning, delete old-model probes from disk.
 

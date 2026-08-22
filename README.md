@@ -10,7 +10,7 @@
 
 它是基于措辞的启发式小工具，不是权威判据。它做的每件事你都可以手动完成：开一个新会话、扫一眼思维链、关掉。
 
-![控制台](https://raw.githubusercontent.com/SpookySandwich/dsh-plugin-rollout-scout/master/assets/console-zh.png)
+![侧边栏入口](https://raw.githubusercontent.com/SpookySandwich/dsh-plugin-rollout-scout/master/assets/console-zh.png)
 
 ## 判定方式
 
@@ -58,7 +58,7 @@ npm test
 
 ## 控制台
 
-**灰度侦察** 位于侧边栏底部、「设置」旁边，点开就是上图的整屏控制台。它注册在 `sidebar.footer.action` 座位上，因此与外壳自带的条目样式一致；侧边栏收起为窄栏时，它也会收成一个图标。
+**灰度侦察** 位于侧边栏底部、「设置」旁边，点开就是下述整屏控制台。它注册在 `sidebar.footer.action` 座位上，因此与外壳自带的条目样式一致；侧边栏收起为窄栏时，它也会收成一个图标。
 
 **左栏** —— 探测提示词、模型（默认 V4-Pro / High）、并发数、存放目录、评分阈值，以及开关：命中强匹配时自动暂停、思维链以中文为主时丢弃、从磁盘删除旧模型会话。
 

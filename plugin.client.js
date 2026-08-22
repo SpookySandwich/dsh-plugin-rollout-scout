@@ -109,13 +109,21 @@ const CSS = [
   /* -- full-frame surface ------------------------------------------------ */
   '.rsc-full{position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;background:color-mix(in srgb,var(--dsw-alias-bg-primary,#16161a) 94%,transparent);-webkit-backdrop-filter:blur(30px) saturate(1.4);backdrop-filter:blur(30px) saturate(1.4);color:var(--dsw-alias-label-primary);font-size:13px;animation:rsc-in 260ms cubic-bezier(.32,.72,0,1) both}',
   '@keyframes rsc-in{from{opacity:0;transform:scale(.99)}to{opacity:1;transform:none}}',
-  '.rsc-top{display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 22%,transparent)}',
+  /* DSH Desktop uses Electron's Windows title-bar overlay. The native window
+   * buttons therefore sit over the renderer instead of taking layout space.
+   * Electron exposes the unobstructed title-bar rectangle through these env()
+   * values; derive the occupied strip from it and keep the normal 22px inset
+   * as breathing room. Browsers and non-overlay shells take the fallbacks. */
+  '.rsc-top{display:flex;align-items:center;gap:14px;padding:16px max(22px,calc(100vw - env(titlebar-area-x,0px) - env(titlebar-area-width,100vw) + 22px)) 16px 22px;border-bottom:1px solid color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 22%,transparent)}',
   '.rsc-h1{font-size:16px;font-weight:600}',
   '.rsc-sub{font-size:12.5px;color:var(--dsw-alias-label-tertiary);flex:1}',
   '.rsc-x{width:30px;height:30px;border:0;border-radius:9px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-size:15px}',
   '.rsc-x:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}',
   '.rsc-cols{flex:1;display:flex;min-height:0}',
-  '.rsc-left{width:340px;flex:none;overflow-y:auto;padding:18px 20px 40px;display:flex;flex-direction:column;gap:13px;border-right:1px solid color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 18%,transparent)}',
+  /* Leave the sidebar footer band free of console controls. The translucent
+   * surface forwards clicks in the launcher's live rectangle back to its
+   * toggle, so the same row that opened the console can close it again. */
+  '.rsc-left{width:340px;flex:none;overflow-y:auto;padding:18px 20px 40px;margin-bottom:110px;display:flex;flex-direction:column;gap:13px;border-right:1px solid color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 18%,transparent)}',
   '.rsc-right{flex:1;min-width:0;overflow-y:auto;padding:18px 22px 60px}',
 
   /* -- form -------------------------------------------------------------- */
@@ -575,7 +583,7 @@ return {
         });
       const liveCount = remote ? remote.active : 0;
 
-      return React.createElement('div', { className: 'rsc-full' },
+      return React.createElement('div', { className: 'rsc-full', onClick: props.onSurfaceClick },
         React.createElement('div', { className: 'rsc-top' },
           React.createElement('span', { className: 'rsc-h1' }, t('title')),
           React.createElement('span', { className: 'rsc-sub' },
@@ -877,7 +885,19 @@ return {
     function ConsoleSurface() {
       const open = useOpen();
       if (!open) return null;
-      return React.createElement(ScoutView, { onClose: function () { openStore.set(false); } });
+      return React.createElement(ScoutView, {
+        onClose: function () { openStore.set(false); },
+        onSurfaceClick: function (event) {
+          const g = realGlobal();
+          const seat = g && g.document && g.document.querySelector('.rsc-seat');
+          if (!seat || typeof seat.getBoundingClientRect !== 'function') return;
+          const rect = seat.getBoundingClientRect();
+          if (event.clientX >= rect.left && event.clientX <= rect.right
+              && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+            openStore.set(false);
+          }
+        },
+      });
     }
 
     // The launcher is a sidebar footer action — a declared seat beside
