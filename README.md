@@ -3,7 +3,7 @@
 [English](README.en.md) | 简体中文
 
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.7-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.1.1--rc.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
 服务商有时会灰度发布新的对话模型，你分到哪一个全看运气。灰度侦察会用你自己的账号开启一批临时会话，**在思维链流式输出的同时**读取它，并按「推理是怎么写的」打分——读起来像你手上这个旧模型的立刻中止，不像的留下来。
@@ -83,6 +83,8 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 ```
 
 安装后请重启 DSH：宿主端随服务器加载。界面跟随 DSH 显示语言（中文 / English）。
+
+`web` 是 profile 名称，请换成你实际使用的那个。DSH Desktop 用的是 `desktop`；`dsh profile ls` 可以列出，安装结果落在 `~/.dsh/profiles/<名称>/package.json`。
 
 尚未发布到 npm，因此从仓库安装。`lib/client.js` 是构建产物，但已**提交进仓库**，所以安装时无需任何构建步骤——`dsh plugin add` 底层是 pnpm，默认不会执行依赖的生命周期脚本。若你修改了 `plugin.client.js`，请运行 `npm run build` 重新生成（`npm test` 也会顺带生成），并把结果一并提交。
 

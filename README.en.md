@@ -3,7 +3,7 @@
 English | [简体中文](README.md)
 
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.7-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.1.1--rc.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
 Providers sometimes roll a new conversation model out gradually, so which one you get is luck of the draw. Rollout Scout opens throwaway conversations on your own account, reads each one's chain-of-thought **as it streams**, and scores how the reasoning is written — cancelling the ones that read like the model you already have, and keeping the ones that don't.
@@ -83,6 +83,8 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 ```
 
 Restart DSH afterwards: the host half loads with the server. The interface follows DSH's display language (English / 中文).
+
+`web` is the profile name — use whichever profile you actually run. DSH Desktop uses `desktop`; `dsh profile ls` lists them, and `~/.dsh/profiles/<name>/package.json` is where the installed bundle ends up.
 
 Not on npm yet, so install from the repository. `lib/client.js` is a generated bundle but it is **committed**, so the install works without running any build step — `dsh plugin add` is pnpm underneath and does not run dependency lifecycle scripts by default. If you edit `plugin.client.js`, run `npm run build` to regenerate it (`npm test` does this too), and commit the result.
 
