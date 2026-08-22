@@ -84,7 +84,7 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 
 Restart DSH afterwards: the host half loads with the server. The interface follows DSH's display language (English / 中文).
 
-`web` is the profile name — use whichever profile you actually run. DSH Desktop uses `desktop`; `dsh profile ls` lists them, and `~/.dsh/profiles/<name>/package.json` is where the installed bundle ends up.
+`web` is the profile name — use whichever profile you actually run. The standalone harness boots `web`; DSH Desktop uses `desktop`. `~/.dsh/profiles/` lists the ones you have, and the installed bundle ends up in that profile's `package.json`.
 
 Not on npm yet, so install from the repository. `lib/client.js` is a generated bundle but it is **committed**, so the install works without running any build step — `dsh plugin add` is pnpm underneath and does not run dependency lifecycle scripts by default. If you edit `plugin.client.js`, run `npm run build` to regenerate it (`npm test` does this too), and commit the result.
 
