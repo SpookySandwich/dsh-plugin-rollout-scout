@@ -238,6 +238,38 @@ check(r.body.attempts.find((a) => a.id === doomed.id).title === 'V4 catch', 'and
 r = await send('POST', JSON.stringify({ action: 'rename', id: doomed.id, title: '   ' }));
 check(r.status === 400, `an empty title is refused (${r.status})`);
 
+/* ------------------------------------------------- hover is not a promise -- */
+
+// Hovering a fading card rescues it only while the pointer is on it, and
+// clicking into a conversation protects nothing. A mouse crossing the list
+// once pinned everything it touched — durably, which also disarmed the
+// watchdog and emptied force-stop's cohort, so the run could not be stopped.
+r = await send('POST', '{"action":"force-stop"}');
+r = await send('POST', JSON.stringify({
+  action: 'start',
+  config: { prompt: 'probe', folder: FOLDER, concurrency: 1 },
+}));
+check(r.status === 200, `start accepted (${r.status})`);
+view = await until((s) => s.attempts[0] && s.attempts[0].status === 'streaming');
+const grazed = view.attempts[0];
+await writeLog(grazed.sessionId);
+think(grazed.sessionId, 'The scene is simple. Let me sketch the geometry first before any code.\n');
+view = await until((s) => s.attempts[0].status === 'pending-discard');
+check(view.attempts[0].status === 'pending-discard', 'the probe is fading');
+
+r = await send('POST', JSON.stringify({ action: 'hold', id: grazed.id }));
+check(r.status === 200 && !r.body.attempts[0].protected,
+  'hovering rescues the fade without protecting anything');
+r = await send('POST', JSON.stringify({ action: 'release', id: grazed.id }));
+check(r.status === 200 && r.body.attempts[0].status === 'pending-discard',
+  'leaving hands the rescue back');
+
+r = await send('POST', '{"action":"force-stop"}');
+check(cancelled.has(grazed.sessionId), 'force stop reaches a probe that was merely hovered');
+
+r = await send('POST', JSON.stringify({ action: 'pin', id: grazed.id }));
+check(r.status === 400, `the pin action is gone (${r.status})`);
+
 /* ------------------------------------------------------------ self-check -- */
 
 // The corpus is the only thing that separates "found nothing" from "could

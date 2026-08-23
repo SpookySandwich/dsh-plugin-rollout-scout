@@ -570,12 +570,18 @@ return {
       const clickable = !!a.sessionId && !a.deleted && sessions;
       const hits = a.hits || {};
       const hitKeys = Object.keys(hits);
-      const leaving = a.status === 'pending-discard' && !a.pinned && !a.protected;
-      // Rescue only applies while the probe is still cancellable. Wiring the
-      // handlers on finished rows sent a write per mouse-over as the pointer
-      // crossed the list, and pinned a conversation just for being opened —
-      // which then exempted it from "clear finished".
-      const rescuable = !!RESCUABLE[a.status] && !a.pinned;
+      const leaving = a.status === 'pending-discard' && !a.protected;
+      // Rescue only applies while the probe is still cancellable; hover on a
+      // finished row must not generate traffic. The hold is released on
+      // unmount too — clicking into a conversation closes the console, so
+      // mouseleave never fires for that card.
+      const rescuable = !!RESCUABLE[a.status] && !a.protected;
+      const hovered = React.useRef(false);
+      React.useEffect(function () {
+        return function () {
+          if (hovered.current && props.onRelease) props.onRelease(a.id);
+        };
+      }, []);
       return React.createElement('div', {
         className: 'rsc-item',
         'data-id': a.id,
@@ -584,15 +590,14 @@ return {
         'data-tone': tone,
         'data-click': clickable || undefined,
         title: clickable ? t('openSession') : undefined,
-        onMouseEnter: rescuable && props.onHold ? function () { props.onHold(a.id); } : undefined,
+        onMouseEnter: rescuable && props.onHold ? function () { hovered.current = true; props.onHold(a.id); } : undefined,
         // Also released when the card is no longer rescuable but the host
         // still has it held: a probe that finishes under the pointer would
         // otherwise never see the mouse leave.
         onMouseLeave: (rescuable || a.held) && props.onRelease
-          ? function () { props.onRelease(a.id); }
+          ? function () { hovered.current = false; props.onRelease(a.id); }
           : undefined,
         onClick: clickable ? function () {
-          if (rescuable && props.onPin) props.onPin(a.id);
           sessions.open(a.sessionId);
           openStore.set(false);
         } : undefined,
@@ -686,7 +691,7 @@ return {
         props.attempts.map(function (a) {
           return React.createElement(AttemptCard, {
             key: a.id, attempt: a, config: props.config,
-            onHold: props.onHold, onRelease: props.onRelease, onPin: props.onPin,
+            onHold: props.onHold, onRelease: props.onRelease,
             onProtect: props.onProtect, onRename: props.onRename,
           });
         })
@@ -891,7 +896,7 @@ return {
       }, 0);
       const queue = attempts
         .filter(function (a) {
-          if (a.pinned || a.status === 'pending-discard') return true;
+          if (a.protected || a.status === 'pending-discard') return true;
           return a.status !== 'discarded';
         });
       const liveCount = remote ? remote.active : 0;
@@ -1118,7 +1123,6 @@ return {
                 attempts: queue, config: config,
                 onHold: function (id) { call('hold', { id: id }); },
                 onRelease: function (id) { call('release', { id: id }); },
-                onPin: function (id) { call('pin', { id: id }); },
                 onProtect: function (id, on) { call(on ? 'protect' : 'unprotect', { id: id }); },
                 onRename: function (id, title) { call('rename', { id: id, title: title }); },
               })

@@ -29,8 +29,9 @@ it is), and flags. The interesting states:
 | `kept` / `discarded` | closed |
 
 `pending-discard` exists so a wrong verdict is recoverable: the card fades for
-`FADE_MS` before `commitDiscard` actually cancels, and a hover or click during
-the fade rescues it.
+`FADE_MS` before `commitDiscard` actually cancels. Hovering holds the fade for
+exactly as long as the pointer stays; release re-offers it. The hold is a
+transient — a probe survives the run only through `protect`.
 
 ## Cohorts
 

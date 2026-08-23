@@ -77,13 +77,13 @@ The actions live in a footer under the column, so they stay put while the settin
 
 Under the scoring thresholds sits a **self-check**: `Self-check 13/13 · known rollout samples kept 5/5`. It runs thirteen hand-labelled chains-of-thought through the same classifier a live probe goes through, under whatever settings are currently in the form — no tokens, no probes. Tighten `Keep above` past what a labelled catch can reach and it turns amber and names the samples you just excluded. It is how you tell *nothing found* apart from *nothing findable*, which otherwise look identical from the console.
 
-**Right** — launched / live / kept / discarded / best score, above a queue in launch order that never jumps. Each row has a score meter, matched phrases, and a preview. Click a card to open the conversation — it keeps running. Hover means you need it: putting the mouse on a fading card rescues it.
+**Right** — launched / live / kept / discarded / best score, above a queue in launch order that never jumps. Each row has a score meter, matched phrases, and a preview. Click a card to open the conversation. Putting the mouse on a fading card rescues it for as long as you hover; to keep a probe for good, press **Keep**.
 
 **Start** asks you to check your notifications first — a run opens a lot of conversations, and DSH Desktop can announce every one of them. Probe prompts are sent as plugin messages so they raise no toast of their own, and the dialog shows whether desktop notifications are on and offers to switch them off. Tick **Do not show this again** to skip it in future.
 
 **Start** becomes **Pause**, which stops launching, cancels the probes already judged as the old model, and lets the undecided ones reach their own verdict. Then **Resume**. **Force stop** aborts everything still in flight.
 
-A probe judged old fades for about 3 seconds (a thin line at the bottom of the card) while the turn is still running, then cancels. Hover or click during the fade keeps it.
+A probe judged old fades for about 3 seconds (a thin line at the bottom of the card) while the turn is still running, then cancels. Hovering pauses the fade while your mouse is on the card — it resumes when you leave. Only **Keep** keeps it.
 
 **Keep** on any card takes that conversation out of reach of everything else in the console: it is never faded, cancelled, swept or deleted, and the promise survives a plugin reload. Probes that finish as a confident catch are kept automatically. Click **Kept** again to hand one back to the ordinary rules.
 
