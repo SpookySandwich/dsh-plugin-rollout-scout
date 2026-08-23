@@ -861,6 +861,14 @@ return {
         const at = ticket();
         try {
           applyState(at, await api('POST', Object.assign({ action: action }, extra)));
+          // Deleting a cold conversation emits no live session event, so the
+          // shell's sidebar keeps its stale row until the next full list
+          // pull. Ask for that pull whenever an action removed conversations.
+          if (action === 'reap' || action === 'delete-all' || action === 'clear') {
+            try {
+              if (sessions && typeof sessions.refresh === 'function') sessions.refresh();
+            } catch (e) {}
+          }
         } catch (e) { setError(String(e.message || e)); }
       }
 
