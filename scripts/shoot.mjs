@@ -33,10 +33,16 @@ if (CHROME === undefined) throw new Error('no Chrome or Edge found');
 const { selfCheck } = await import('../lib/index.js');
 const report = selfCheck({ folder: path.join(os.homedir(), 'rollout-scout') });
 
-/** A run mid-flight: mostly old-model probes, one catch, one fading out. */
+/** blendedScore's formula, so the meter always agrees with the chips beside it. */
+function blended({ positive = 0, negative = 0, regular = false, pauses = 0 }) {
+  const extra = (regular ? 1 : 0) + (pauses >= 1 ? 1 : 0);
+  return (positive + extra + 1) / (positive + negative + extra + 2);
+}
+
+/** A run mid-flight: mostly old-model probes, one catch, one still undecided. */
 function attempt(over) {
   return {
-    id: 1, sessionId: 's', status: 'streaming', verdict: null, score: 0.5,
+    id: 1, sessionId: 's', status: 'streaming', verdict: null,
     decisive: null, reason: null, paragraphs: 0, positive: 0, negative: 0,
     hits: {}, chinese: false, chars: 0, startedAt: 0, endedAt: null,
     deleted: false, error: null, preview: '', regular: false, pauses: 0,
@@ -46,36 +52,38 @@ function attempt(over) {
 }
 
 const attempts = [
+  // The rollout model's usual signature is first-person singular. Four of the
+  // five labelled catches open that way; only one opens "We need", so the hero
+  // card shows the common case and the second shows the summariser exception.
   attempt({
-    id: 14, sessionId: 's14', status: 'kept', verdict: 'rollout', score: 0.88,
-    reason: 'score', paragraphs: 6, positive: 4, negative: 1, chars: 1840,
-    hits: { "I'll": { count: 2, sign: 'pos' }, "I'm": { count: 1, sign: 'pos' }, 'We need': { count: 1, sign: 'neg' } },
+    id: 14, sessionId: 's14', status: 'kept', verdict: 'rollout',
+    reason: 'score', paragraphs: 6, positive: 4, negative: 0, chars: 1840,
+    hits: { "I'll": { count: 2, sign: 'pos' }, "I'm": { count: 1, sign: 'pos' }, 'I need': { count: 1, sign: 'pos' } },
     regular: true, pauses: 2, tps: 46.2, ttft: 4.1, protected: true, kept: true,
-    title: null, // filled per locale below
-    catchTitle: true,
-    preview: "We need to build a single-page demo with physically accurate ray tracing. I'll start from the Schwarzschild metric and work outward, keeping the integrator separate from the shader so each can be checked on its own.",
+    title: null, catchTitle: true,
+    preview: "To avoid conflicts, I'll keep the integrator separate from the shader so each can be checked on its own. I'm treating the lensing pass as the risky part, so that one goes first.",
   }),
   attempt({
-    id: 13, sessionId: 's13', status: 'kept-streaming', verdict: 'rollout', score: 0.74,
+    id: 13, sessionId: 's13', status: 'kept-streaming', verdict: 'rollout',
     reason: 'shape', paragraphs: 4, positive: 3, negative: 1, chars: 906,
     regular: true, pauses: 1, tps: 48.9, ttft: 3.6,
     hits: { "I'll": { count: 1, sign: 'pos' }, 'I need': { count: 1, sign: 'pos' }, 'We need': { count: 1, sign: 'neg' } },
-    preview: "We need to understand what the user is asking for before writing anything. I'll lay out the constraints first, then decide which parts can be done in one pass.",
+    preview: "We need to build a single-page demo with physically accurate ray tracing. I'll lay out the constraints first, then decide which parts can be done in one pass.",
   }),
   attempt({
-    id: 12, sessionId: 's12', status: 'streaming', verdict: null, score: 0.33,
+    id: 12, sessionId: 's12', status: 'streaming', verdict: null,
     paragraphs: 3, positive: 0, negative: 2, chars: 604, tps: 58.4, ttft: 2.9,
     hits: { 'We need': { count: 1, sign: 'neg' }, "Let's": { count: 1, sign: 'neg' } },
     preview: "We need to figure out what they want here. We can probably get away with a single file, but let's check the directory first.",
   }),
   attempt({
-    id: 11, sessionId: 's11', status: 'streaming', verdict: null, score: 0.5,
+    id: 11, sessionId: 's11', status: 'streaming', verdict: null,
     paragraphs: 1, positive: 0, negative: 0, chars: 148, tps: 44.1, ttft: 5.2,
     hits: {},
     preview: 'Considering how much of the pipeline actually needs to be drawn before the diagram stops being useful.',
   }),
   attempt({
-    id: 10, sessionId: 's10', status: 'starting', verdict: null, score: 0.5,
+    id: 10, sessionId: 's10', status: 'starting', verdict: null,
     paragraphs: 0, chars: 0, preview: '',
   }),
   // Discarded probes are filtered out of the queue but still counted, so the
@@ -84,7 +92,8 @@ const attempts = [
     id: 9 - i, sessionId: 'd' + i, status: 'discarded', verdict: 'old',
     score: 0, reason: 'decisive', decisive: 'old', chars: 300,
   })),
-];
+].map((a) => (a.score === undefined ? { ...a, score: blended(a) } : a));
+
 
 const state = {
   running: true, paused: false, launched: 14, note: null, lastError: null,
