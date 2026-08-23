@@ -2,6 +2,7 @@
 
 English | [简体中文](README.md)
 
+[![npm](https://img.shields.io/npm/v/dsh-plugin-rollout-scout?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-plugin-rollout-scout)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![dsh](https://img.shields.io/badge/dsh-0.1.1--rc.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
@@ -101,14 +102,20 @@ The run lives on the host, so it keeps going when you close the console — the 
 ## Install
 
 ```bash
-dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
+dsh plugin --profile web add dsh-plugin-rollout-scout
 ```
 
 Restart DSH afterwards: the host half loads with the server. The interface follows DSH's display language (English / 中文).
 
+Installing from the repository also works and tracks `master` rather than the last release:
+
+```bash
+dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
+```
+
 `web` is the profile name — use whichever profile you actually run. The standalone harness boots `web`; DSH Desktop uses `desktop`. `~/.dsh/profiles/` lists the ones you have, and the installed bundle ends up in that profile's `package.json`.
 
-Not on npm yet, so install from the repository. `lib/client.js` is a generated bundle but it is **committed**, so the install works without running any build step — `dsh plugin add` is pnpm underneath and does not run dependency lifecycle scripts by default. If you edit `plugin.client.js`, run `npm run build` to regenerate it (`npm test` does this too), and commit the result.
+`lib/client.js` is a generated bundle but it is **committed**, so a repository install needs no build step. If you edit `plugin.client.js`, run `npm run build` to regenerate it (`npm test` does this too), and commit the result.
 
 ## How it works
 

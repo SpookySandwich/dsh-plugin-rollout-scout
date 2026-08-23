@@ -2,6 +2,7 @@
 
 [English](README.en.md) | 简体中文
 
+[![npm](https://img.shields.io/npm/v/dsh-plugin-rollout-scout?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-plugin-rollout-scout)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![dsh](https://img.shields.io/badge/dsh-0.1.1--rc.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
@@ -99,14 +100,20 @@ npm test
 ## 安装
 
 ```bash
-dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
+dsh plugin --profile web add dsh-plugin-rollout-scout
 ```
 
 安装后请重启 DSH：宿主端随服务器加载。界面跟随 DSH 显示语言（中文 / English）。
 
+也可以直接从仓库安装，跟的是 `master` 而不是最近一次发布：
+
+```bash
+dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
+```
+
 `web` 是 profile 名称，请换成你实际使用的那个。独立版启动的是 `web`，DSH Desktop 用的是 `desktop`。`~/.dsh/profiles/` 下就是你现有的 profile，安装结果落在对应 profile 的 `package.json` 里。
 
-尚未发布到 npm，因此从仓库安装。`lib/client.js` 是构建产物，但已**提交进仓库**，所以安装时无需任何构建步骤——`dsh plugin add` 底层是 pnpm，默认不会执行依赖的生命周期脚本。若你修改了 `plugin.client.js`，请运行 `npm run build` 重新生成（`npm test` 也会顺带生成），并把结果一并提交。
+`lib/client.js` 是构建产物，但已**提交进仓库**，所以从仓库安装时也无需任何构建步骤。若你修改了 `plugin.client.js`，请运行 `npm run build` 重新生成（`npm test` 也会顺带生成），并把结果一并提交。
 
 ## 工作原理
 
