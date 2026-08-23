@@ -106,3 +106,22 @@ conversation intact.
 renders detached conversations as first-class sidebar rows and ships a
 **Move out of Workspace** menu item; without it they land in the shell's
 "Ungrouped" accordion.
+
+## A harness listener throws on every agent disposal
+
+`dsh-file-reference-local` logs a warning each time this plugin tears an agent
+down:
+
+    [agent-registry] agent "session-…": agent/disposed listener threw:
+    TypeError: Cannot read properties of undefined (reading 'catch')
+
+Its `agent/disposed` handler calls `disposePrompt`, which does
+`fiber.dispose().catch(...)` (`lib/index.js:282`). Cordis disposers are
+single-shot and a repeat call returns `undefined`, and by the time
+`agent/disposed` fires the prompt fiber has normally gone already with the
+agent's scope — so the chain throws.
+
+It is upstream, harmless (the disposal completes; the registry contains the
+throw and warns), and unavoidable from here: any plugin that disposes agents
+triggers it. Not to be confused with the same mistake this plugin used to make
+at its own three disposal sites, which `release()` fixed.
