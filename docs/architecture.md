@@ -26,6 +26,7 @@ it is), and flags. The interesting states:
 | `kept-streaming` | reads as rollout, still thinking, still revisable |
 | `pending-discard` | judged old, fading on the card, turn still running |
 | `discarding` | cancelled, waiting on `turn/end` |
+| `stopping` | stop requested, agent creation/teardown still draining |
 | `kept` / `discarded` | closed |
 
 `pending-discard` exists so a wrong verdict is recoverable: the card fades for
@@ -33,39 +34,40 @@ it is), and flags. The interesting states:
 exactly as long as the pointer stays; release re-offers it. The hold is a
 transient — a probe survives the run only through `protect`.
 
-## Cohorts
+## Ownership, stopping, and deletion are separate
 
-Stop and delete operations do not each decide what they may touch. Two
-predicates decide once, and the operations act on what comes back:
+One predicate cannot safely answer all lifecycle questions. The host uses
+three independent facts:
 
 ```js
-function settled(attempt)  // fixed in place by the user; the classifier may not revise it
-function sweepable(attempt) // membership test for every bulk stop/delete cohort
+settled(attempt)            // classifier may no longer revise this conversation
+hasOwnedResources(attempt) // create/handle/dispose can still touch the session
+deletable(attempt)          // no durable Keep promise protects the log
 ```
 
-`forceStop`, `pause`, `clearHistory`, `deleteAll` and `releaseOnUnload` all
-iterate `state.attempts.filter(sweepable)`. The folder sweeps subtract
-`keptIds()` from their id set once, in `probeSessionIds`. Nothing else filters.
+**Force stop** and plugin unload cancel every owned live turn, including a
+protected catch. Protection preserves data, not token spending. Pause is more
+selective: it cancels already-decided old probes and lets undecided probes reach
+a verdict. Clear and Delete act only on `deletable` conversations, and they do
+not unlink a log until `hasOwnedResources` is false.
 
-The split between the two predicates is about *who is acting*, not about
-degrees of caution. The classifier retracting a live `kept-streaming` probe
-because a later paragraph opened with "Let me" is evidence, and only `settled`
-outranks it. A user pressing Force stop is aiming at the run, not at that
-conversation, so `sweepable` excludes catches as well.
-
-`state.protectedIds` is the durable half of `settled`. It is keyed by session
-id rather than by attempt, because the attempt list does not survive a plugin
-reload but the folder sweep that runs afterwards still has to know what to
-skip. It persists to `<probeFolder>/.rollout-scout.json`, so it travels with
-the folder it describes.
+Each attempt owns its config and folder snapshot. Protection sets are cached
+per normalized folder and persisted atomically, in mutation order, to
+`<probeFolder>/.rollout-scout.json`. This prevents an old turn ending after a
+folder change from writing its promise into the new folder.
 
 ## Pausing
 
 Pause stops launching and cancels the probes already judged old; undecided
 ones run on to their own verdict. That is the whole distinction from Force
-stop, which cancels the entire cohort.
+stop, which cancels every live probe while preserving protected logs.
 
 ## Cleanup
+
+Every natural `turn/end` releases its agent handle. Cancellation paths swap the
+long watchdog for a short reaper, and destructive actions wait for both agent
+creation and disposal to drain before unlinking a log. A failed deletion keeps
+its card, so retry remains possible instead of producing an invisible orphan.
 
 `probeSessionIds` is the single answer to "what probe conversations exist",
 unioning three sources — workspace slots, the live session store, and the
@@ -100,7 +102,7 @@ locales come out looking different from identical state.
 
 ## Tests
 
-`npm test` runs six files, no framework, each a script that prints
+`npm test` runs seven files, no framework, each a script that prints
 `PASS`/`FAIL` lines and exits non-zero:
 
 - `classifier.test.mjs` — the classifier and the config guards, against the
@@ -111,6 +113,8 @@ locales come out looking different from identical state.
 - `lifecycle.test.mjs` — pause culls settled probes, a keep survives every
   destructive path, sweeps find conversations by `cwd`, and the self-check
   reports the corpus honestly under an unreachable threshold
+- `ownership.test.mjs` — stop-during-create, watchdog re-arming, cancellation
+  reapers, protected-stop semantics, and hover leases across `turn/end`
 - `client-css.test.mjs` — source-to-artifact checks for shell geometry
 
 The host is driven through the real route handler with a mock `ctx`, so tests

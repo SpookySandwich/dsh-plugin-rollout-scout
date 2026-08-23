@@ -27,6 +27,7 @@ function check(ok, message) {
 // Probes that start cleanly and then never end: no `turn/end` is ever
 // emitted, so every one of them stays live.
 const removed = [];
+let locateFails = false;
 const attached = new Set();
 const workspace = {
   path: FOLDER,
@@ -53,7 +54,10 @@ apply({
   sessionPersistence: {
     list: async () => [...attached].map((id) => ({ id })),
     // Each session lives in its own directory, named for the session.
-    locate: (header) => ({ path: path.join(FOLDER, 'sessions', header.id, 'session.jsonl') }),
+    locate: (header) => {
+      if (locateFails) throw new Error('persistence unavailable');
+      return { path: path.join(FOLDER, 'sessions', header.id, 'session.jsonl') };
+    },
   },
 });
 const route = routes.find((r) => r && r.path === '/rollout-scout');
@@ -130,6 +134,31 @@ check(r.body.attempts.length === 0 && r.body.launched === 0, 'the list and the c
 const gone = await Promise.all(liveIds.map((id) =>
   fs.readFile(path.join(FOLDER, 'sessions', id, 'session.jsonl'), 'utf8').then(() => false, () => true)));
 check(gone.every(Boolean), 'and the session logs are gone from disk');
+
+/* ---------------------------------------- failed delete keeps its own card -- */
+
+r = await send('POST', JSON.stringify({
+  action: 'start', config: { prompt: 'probe', folder: FOLDER, concurrency: 1 },
+}));
+view = await until((s) => s.attempts.length === 1 && s.attempts[0].status === 'streaming');
+const retryable = view.attempts[0];
+await fs.mkdir(path.join(FOLDER, 'sessions', retryable.sessionId), { recursive: true });
+await fs.writeFile(path.join(FOLDER, 'sessions', retryable.sessionId, 'session.jsonl'), 'live\n');
+await send('POST', '{"action":"force-stop"}');
+await until((s) => s.active === 0);
+
+locateFails = true;
+r = await send('POST', '{"action":"delete-all"}');
+check(r.status === 409, `a persistence failure is reported (${r.status})`);
+view = (await send('GET')).body;
+check(view.attempts.some((attempt) => attempt.id === retryable.id),
+  'the failed session keeps its card, so it remains reachable');
+check(await fs.readFile(path.join(FOLDER, 'sessions', retryable.sessionId, 'session.jsonl'), 'utf8').then(() => true, () => false),
+  'the failed session log is still intact');
+
+locateFails = false;
+r = await send('POST', '{"action":"delete-all"}');
+check(r.status === 200 && r.body.attempts.length === 0, 'retrying deletion succeeds cleanly');
 
 await fs.rm(FOLDER, { recursive: true, force: true });
 

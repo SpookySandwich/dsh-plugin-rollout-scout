@@ -129,5 +129,8 @@ r = await send({ method: 'GET' });
 check(r.status === 200 && r.body.running === false && r.body.attempts.length === 0,
   'no probe was launched by any refused request');
 
+r = await send({ method: 'POST', headers: JSON_HEADERS, body: '{"action":"resume"}' });
+check(r.status === 409, `resume without a paused run is refused (${r.status})`);
+
 console.log(`\n${checks - failed}/${checks} passed`);
 process.exit(failed === 0 ? 0 : 1);

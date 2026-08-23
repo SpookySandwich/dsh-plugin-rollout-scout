@@ -53,6 +53,21 @@ check(
   built.includes('createPortal'),
   'the generated client ships the portal',
 );
+check(
+  source.includes('const sessionsRevision = remote ? remote.sessionsRevision : null;')
+    && source.includes('sessions.refresh()'),
+  'every host-side deletion, including auto-delete, can refresh the sidebar baseline',
+);
+check(
+  source.includes("call('hold', { id: id, lease: lease })")
+    && source.includes("call('release', { id: id, lease: lease })"),
+  'hover rescue carries a lease so crossed requests cannot leave a card held',
+);
+check(
+  source.includes("disabled: liveCount === 0")
+    && !source.includes("title: t('forceStopHint'), disabled: blocking === 0"),
+  'Force stop stays available for a protected live conversation',
+);
 
 console.log(`\n${checks - failed}/${checks} passed`);
 process.exit(failed === 0 ? 0 : 1);

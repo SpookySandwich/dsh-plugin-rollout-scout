@@ -68,7 +68,9 @@ async function settled(timeoutMs = 5000) {
 
 const config = JSON.stringify({
   action: 'start',
-  config: { prompt: 'probe', folder: FOLDER, concurrency: 2 },
+  // Concurrency one pins the boundary where the failed launch itself is the
+  // only active slot; the refill must happen after `launching` turns false.
+  config: { prompt: 'probe', folder: FOLDER, concurrency: 1 },
 });
 
 let r = await send('POST', config);

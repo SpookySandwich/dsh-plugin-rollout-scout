@@ -81,6 +81,10 @@ new plugin instance has no handles to them. The plugin tears its cohort down
 on unload for that reason, and the folder sweep exists to reach anything from
 before.
 
+A completed turn does not dispose its agent automatically. The plugin releases
+every handle on `turn/end`; otherwise each finished probe remains registered as
+an idle live agent until a later Clear/Delete or process exit.
+
 An orphan that predates the current instance can still be `cancel`ed via
 `ctx.agents.get(id)`, which stops the spending, but its session object stays
 in the store until the app restarts — the disposer is only reachable from the
@@ -146,4 +150,3 @@ sends one message and never calls a tool.
 problem would surface as failed launches and trip the breaker after three.
 The empty layer is the right shape here; the warning is the harness noticing
 something unusual, not something broken.
-

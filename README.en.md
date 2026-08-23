@@ -85,7 +85,7 @@ Under the scoring thresholds sits a **self-check**: `Self-check 13/13 · known r
 
 A probe judged old fades for about 3 seconds (a thin line at the bottom of the card) while the turn is still running, then cancels. Hovering pauses the fade while your mouse is on the card — it resumes when you leave. Only **Keep** keeps it.
 
-**Keep** on any card takes that conversation out of reach of everything else in the console: it is never faded, cancelled, swept or deleted, and the promise survives a plugin reload. Probes that finish as a confident catch are kept automatically. Click **Kept** again to hand one back to the ordinary rules.
+**Keep** on any card is a promise about the conversation on disk: it is never faded, swept or deleted, and the promise survives a plugin reload. It does not make a token-spending turn unstoppable — **Force stop** still ends the active turn while preserving both the conversation and its Keep mark. Probes that finish as a confident catch are kept automatically. Click **Kept** again to hand one back to cleanup rules.
 
 Probes are named in the sidebar as you go — `Rollout probe 12` while running, and `★ Rollout catch 12 · 87%` once one is caught, so a hit is obvious in a list full of probes. **Rename** on a kept card lets you name it yourself; naming one keeps it.
 
@@ -93,7 +93,7 @@ Probes are named in the sidebar as you go — `Rollout probe 12` while running, 
 
 If probe conversations turn up in the folder that the console is not tracking — left by a plugin reload, an upgrade, or an app restart — a banner offers to **sweep** them. Those are the ones that otherwise sit in the sidebar with no way to remove them, since the shell's own menu offers Archive but not Delete.
 
-Both refuse to touch a probe that is still streaming, except a kept one — that stays live on purpose, so it does not hold up a delete. Pause stops launching but leaves probes in flight, so **Delete all sessions** asks you to **Force stop** first rather than unlinking a log that is still being written to. The probe folder may not be your home directory, a drive root, or anywhere inside `~/.dsh` — deleting is scoped to that folder, and those would put unrelated conversations in its path.
+Both refuse to touch a probe that is still streaming or draining resources, including a kept one. Pause stops launching but leaves probes in flight, so **Delete all sessions** asks you to **Force stop** first and waits for host teardown before unlinking any log that may still be written to. The probe folder may not be your home directory, a drive root, or anywhere inside `~/.dsh` — deleting is scoped to that folder, and those would put unrelated conversations in its path.
 
 If three probes in a row fail to even start — provider unreachable, folder unwritable — the run stops itself and reports the error instead of relaunching into the same failure forever. **Resume** tries again.
 

@@ -32,6 +32,7 @@ function check(ok, message) {
 // and drive it to a verdict without a provider.
 const listeners = new Map();
 const cancelled = new Set();
+const disposed = new Set();
 const titles = new Map();
 const attached = new Set();
 const live = new Map();
@@ -66,7 +67,14 @@ apply({
       live.set(sessionId, { id: sessionId, header: { id: sessionId, cwd: FOLDER } });
       return {
         agent: { followup() {}, cancel() { cancelled.add(sessionId); } },
-        dispose: async () => { live.delete(sessionId); },
+        dispose: async () => { disposed.add(sessionId); live.delete(sessionId); },
+      };
+    },
+    resume: async ({ resumeSessionId }) => {
+      live.set(resumeSessionId, { id: resumeSessionId, header: { id: resumeSessionId, cwd: FOLDER } });
+      return {
+        agent: { cancel() {} },
+        dispose: async () => { live.delete(resumeSessionId); },
       };
     },
   },
@@ -159,7 +167,7 @@ check(promises.protected.includes(ids[1]), 'the promise is on disk, so it outliv
 cancelled.delete(ids[1]);
 r = await send('POST', '{"action":"force-stop"}');
 check(r.status === 200, `force-stop accepted (${r.status})`);
-check(!cancelled.has(ids[1]), 'force stop did not cancel the kept probe');
+check(cancelled.has(ids[1]), 'force stop ended the kept probe without deleting it');
 check(await exists(ids[1]), 'and its log is intact');
 
 r = await send('POST', '{"action":"clear"}');
@@ -218,6 +226,8 @@ view = await send('GET');
 const held = view.body.attempts.find((a) => a.id === doomed.id);
 check(held && held.protected, 'it is still reported as kept after the turn ended');
 check(held && held.status !== 'discarded', `and not marked discarded (${held && held.status})`);
+await until(() => disposed.has(doomed.sessionId));
+check(disposed.has(doomed.sessionId), 'a natural turn/end releases its live agent handle');
 // deleteAttempt runs detached from finish(), so give it room to land before
 // asserting the file is still there.
 for (let i = 0; i < 20 && await exists(doomed.sessionId); i += 1) {
