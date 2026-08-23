@@ -121,7 +121,7 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 
 ## 兼容性
 
-入口占用 `sidebar.footer.action` 座位（list 类型，会与其它底部操作并排，而不是把谁挤掉），控制台本体渲染在全局 `shell.overlay` 层。两者都不属于会话作用域，因此不与任何会话内插件冲突。需要侧边栏声明了该座位的 DSH 版本；否则控制台将没有入口。与 [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream)、[dsh-plugin-smooth-motion](https://github.com/SpookySandwich/dsh-plugin-smooth-motion)、[dsh-plugin-message-tree](https://github.com/SpookySandwich/dsh-plugin-message-tree) 同族。
+入口占用 `sidebar.footer.action` 座位（list 类型，会与其它底部操作并排，而不是把谁挤掉），控制台本体渲染在全局 `shell.overlay` 层。两者都不属于会话作用域，因此不与任何会话内插件冲突。需要侧边栏声明了该座位的 DSH 版本；否则控制台将没有入口。与 [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream)、[dsh-plugin-no-workspace](https://github.com/SpookySandwich/dsh-plugin-no-workspace)、[dsh-plugin-message-edit](https://github.com/SpookySandwich/dsh-plugin-message-edit) 同族。
 
 ## 关于额度
 

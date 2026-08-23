@@ -1,2 +1,6 @@
 node_modules/
 *.tgz
+
+# scratch that has drifted into the working tree before
+.tmp-scan.py
+*.stackdump

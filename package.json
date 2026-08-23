@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-rollout-scout",
   "version": "1.3.1",
-  "description": "Fish for limited-rollout models in DeepSeek Harness: launch concurrent probe conversations, classify their live chain-of-thought by phrase signals, discard old-model probes instantly, and keep confident rollout catches.",
+  "description": "Detect which conversation model your DeepSeek Harness account is served: score probe conversations' live chain-of-thought, cancel old-model probes in seconds, keep confident catches.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

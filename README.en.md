@@ -123,7 +123,7 @@ Implementation notes live in [`docs/`](docs/) — [architecture](docs/architectu
 
 ## Compatibility
 
-The launcher takes a `sidebar.footer.action` seat (a list slot, so it sits beside any other footer action rather than displacing one) and the console renders on the frame-wide `shell.overlay` layer. Neither is per-session, so it conflicts with no session plugin. Requires a DSH whose sidebar declares that seat; without it the console has no way in. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-smooth-motion](https://github.com/SpookySandwich/dsh-plugin-smooth-motion) and [dsh-plugin-message-tree](https://github.com/SpookySandwich/dsh-plugin-message-tree).
+The launcher takes a `sidebar.footer.action` seat (a list slot, so it sits beside any other footer action rather than displacing one) and the console renders on the frame-wide `shell.overlay` layer. Neither is per-session, so it conflicts with no session plugin. Requires a DSH whose sidebar declares that seat; without it the console has no way in. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-no-workspace](https://github.com/SpookySandwich/dsh-plugin-no-workspace) and [dsh-plugin-message-edit](https://github.com/SpookySandwich/dsh-plugin-message-edit).
 
 ## A note on cost
 
