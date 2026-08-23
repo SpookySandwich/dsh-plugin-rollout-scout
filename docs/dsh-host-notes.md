@@ -125,3 +125,25 @@ It is upstream, harmless (the disposal completes; the registry contains the
 throw and warns), and unavoidable from here: any plugin that disposes agents
 triggers it. Not to be confused with the same mistake this plugin used to make
 at its own three disposal sites, which `release()` fixed.
+
+## Probes deliberately join no agent preset
+
+Every probe logs a warning:
+
+    [windows-agent-presets] agent "session-…" was published without joining an
+    agent preset; its tools, prompt sections, and skill catalog resolve against
+    the empty global layer
+
+`agentPresets.mount(agentCtx, id)` from the `setup` callback would silence it,
+and that is the wrong trade. The preset's composition carries the tool
+catalogue and system prompt sections, and the classifier reads the model's
+chain-of-thought — change what is in the context and the reasoning changes with
+it, which would drift the calibration the labelled corpus was captured under.
+It would also pay for that catalogue on every throwaway probe, and a probe
+sends one message and never calls a tool.
+
+`mount` rejecting inside `setup` rolls the agent creation back, so a preset
+problem would surface as failed launches and trip the breaker after three.
+The empty layer is the right shape here; the warning is the harness noticing
+something unusual, not something broken.
+
