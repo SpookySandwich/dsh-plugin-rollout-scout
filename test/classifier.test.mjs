@@ -5,7 +5,10 @@
 //   node test/classifier.test.mjs
 import os from 'node:os';
 import path from 'node:path';
-import { classify, chineseShare, sanitizeConfig } from '../lib/index.js';
+import { classify, chineseShare, sanitizeConfig, wantsDiscard } from '../lib/index.js';
+import {
+  FIXTURES, weNeedBlob, weNeedOpenings, weNeedThenIll,
+} from '../lib/fixtures.js';
 
 const CONFIG = {
   discardBelow: 0.35,
@@ -35,146 +38,9 @@ function verdict(text) {
 // ---------------------------------------------------------------- samples --
 
 // Labelled NEW model: flowing first-person prose, no "Let me" anywhere.
-const newModel = `To avoid conflicts, I'll keep I18n.cs edits solely under one change and handle any additional edits separately if needed. I'm also noting the Antigravity dead catalog rules as report-only, and fixing the EffectiveValue credits hijack via a monetary-only BalanceAmount.
-
-I've spotted a bigger conflict: HeroViewModelTests.cs is touched by both the chart work and the value-mode test changes, so I'm resolving this by having the chart-related change own the entire HeroViewModel.cs and HeroViewModelTests.cs files, including the value-mode updates.
-
-Meanwhile, the money-related change should own the Core money files—ProviderPriority.cs, ProviderMoney.cs, Catalog.cs, the new CurrencyRates.cs, and various provider files—along with their corresponding test files.
-
-Now I'm mapping out clear file ownership boundaries: the chart component owns HeroViewModel, UsageTimelineSegmentViewModel, UsageCylinder views, I18n helper keys, DashboardViewModel, and their tests.
-
-I should use FormatCardLabel mapping in QuotaRowViewModel instead, and I'm noting the relevant test files to update for this change.
-
-Now I'm pinning down the cross-agent interface contracts: BalanceAmount should only reflect monetary USD values with conversions for CNY and EUR.
-
-Since C1 orders candidates before taking the top six, the initial ProviderSortPolicy ranking matters less — I'll keep it as a stable base.
-
-For cadence-mode gray bars, I'm settling on a weight formula using tokens times overall availability with a minimum floor.`;
-
-// Labelled OLD model: "Let me" opens the reasoning and recurs.
-const oldModel = `The directory is empty. Let me create a 3D cyberpunk scene. I'll build a self-contained HTML file with Three.js from a CDN, featuring:
-
-- A neon-lit cyberpunk city scene
-- Buildings with glowing windows
-- Neon signs
-- Rain (particles)
-- Fog / atmosphere
-
-I'll create a single HTML file that uses Three.js via CDN import map. Let me make it really impressive with:
-
-1. Neon grid floor
-2. Procedural buildings with emissive windows
-3. Neon signs (billboards)
-4. Rain particles
-
-Let me write a comprehensive, polished single-file scene. I'll use ES modules with import maps pointing to unpkg or jsdelivr CDN.
-
-Let me use three.js via CDN. I'll use import map with three@0.160.0 or similar. Actually let me use a version that's stable and has the addons available.`;
-
-// Old model: mid-CoT "I'll", then "Let me" openings later.
-const illMidThenLetMe = `The user wants to generate a 3D cyberpunk city. This is a creative coding task.
-
-I'll create a single HTML file with Three.js from CDN that renders a procedural city.
-
-Let me build a nice complete scene. I'll use Three.js via CDN.
-
-Let me write it carefully.`;
-
-// Old model whose only "Let me" is the FINAL paragraph.
-const letMeLastParagraph = `The user wants me to make a 3D cyberpunk scene.
-
-I should:
-1. Check the working directory structure
-2. Understand the existing project
-
-Let me start by listing files and reading package.json.`;
-
-const opensWithIll = `I'll work through the constraints in order before writing anything.
-
-For the second case the ordering matters, so I need to check it separately.
-
-I am fairly confident the third branch is unreachable.`;
-
-const englishQuotingChinese = `The user asks in Chinese: 三十四乘以二十七等于多少 — I need to compute that product.
-
-I'm going to multiply it out in two parts and check the result.
-
-I think the answer is straightforward once split into tens and units.
-
-For clarity I have shown both partial products.`;
-
-const chineseThinking = `用户想知道三十四乘以二十七等于多少。我需要一步一步计算。
-
-先算三十四乘以二十，得到六百八十。然后算三十四乘以七。`;
-
-// Old model: first-person plural openings. "We need" / "We will" are not
-// rollout signals — the new model uses "I", not "we".
-const weNeedOpenings = `We need to split this into two patches so the chart work stays isolated.
-
-We will keep the first change scoped to the view models only.
-
-We should also update the tests for the money path.
-
-We're going to leave the ranking as a stable base.`;
-
-// Single blob, no newlines — the live UI case: 700 chars of "We need…"
-// with 0 paragraphs on screen because streaming used to drop the only one.
-const weNeedBlob = 'We need respond in Chinese. User asks "做一个 3D 赛博朋克场景" meaning make a 3D cyberpunk scene. We need infer they want app in current directory. We can create HTML/JS.';
-
-const blandFinished = `The user wants a 3D cyberpunk scene. This is a creative coding task in the current working directory as a single HTML file.`;
-
-// The live false-keep: opens like the rollout model, then "Let me" appears.
-const illFirstThenLetMe = `I'll work through this in a single HTML file with Three.js from a CDN.
-
-Let me start by setting up the scene and the camera.
-
-Let me add the earth mesh next.`;
-
-// Observed new-model CoT: long first-person planning, "For"/"I'll"/"I'm"
-// openings, and a trailing "Let me start writing the file" that is NOT a
-// paragraph opening. Must keep — that Let me must not flip the verdict.
-const newModelLetMeInBody = `For mode A N=10 or 20, I'll simulate the linear plant using the structural matrices.
-
-For mode B's eigenvalues, I'm using a Jacobi eigensolver on dense matrices up to 65×65.
-
-The key insight is that the full plant is not diagonalized—it's represented in the original coordinate system.
-
-For the convergence analysis, I'm running independent simulations for N=8, 16, 32, and 64.
-
-For the UI, I'm adding a convergence results panel with a small table and a bar chart.
-
-For the control period and integration step, I'm using 5 ms and 1 ms respectively.
-
-Now I'm setting up the UI layout with a top bar for mode selection and status, a left panel for simulation. I'm keeping the height and width sensible for 1080p and 4K displays with responsive CSS. Let me start writing the file in two parts, beginning with the physics core and self-tests, then running the Node tests.`;
-
-// Observed summariser CoT: starts "We need to build…" then even I'll/I'm
-// paragraphs. Must keep — that opening we is the summariser restating the
-// task, not the old model's voice.
-const weNeedThenIll = `We need to build a single-page HTML demo of a black hole with physically accurate ray tracing using the Schwarzschild metric to simulate gravitational lensing around the event horizon.
-
-I'll integrate the geodesic equation using RK4 steps, checking at each step whether the ray crosses the disk, reaches the horizon, or escapes to the sky.
-
-Now I'm turning to the disk emission model, using the standard Shakura-Sunyaev temperature profile for a thin Keplerian accretion disk.
-
-For the observed redshift, I need to account for both gravitational and Doppler effects in the Schwarzschild geometry.
-
-Now I'm checking the formula g = sqrt(1 - 3M/r) / (1 - Ω * b_axial) where b_axial is the normalized axial angular momentum.`;
-
-const cases = [
-  ['LABELLED new model', newModel, 'keep'],
-  ['LABELLED old model', oldModel, 'discard'],
-  ['mid-CoT I-will, Let me later', illMidThenLetMe, 'discard'],
-  ['Let me only in final paragraph', letMeLastParagraph, 'discard'],
-  ['CoT opening with I-will', opensWithIll, 'keep'],
-  ['English quoting Chinese', englishQuotingChinese, 'keep'],
-  ['reasoning in Chinese', chineseThinking, 'discard'],
-  ['We need / We will openings', weNeedOpenings, 'discard'],
-  ['single-blob We need (no newlines)', weNeedBlob, 'discard'],
-  ['finished with no I/we signal', blandFinished, 'discard'],
-  ['I-will first, Let me later', illFirstThenLetMe, 'discard'],
-  ['new model with Let me only in paragraph body', newModelLetMeInBody, 'keep'],
-  ['rollout CoT that opens We need then I-voice', weNeedThenIll, 'keep'],
-];
+// The corpus lives in lib/fixtures.js because the console runs it too: the
+// samples the user watches being classified are the ones asserted on here.
+const cases = FIXTURES.map((f) => [f.title, f.text, f.label === 'rollout' ? 'keep' : 'discard']);
 
 let failed = 0;
 // Counted separately from `cases`: the assertions below the table are checks
@@ -236,6 +102,52 @@ check(
       : `summariser CoT We-need opener is keep (regular=${summarised.regular} score=${summarised.score.toFixed(2)})`,
 );
 
+// ------------------------------------------------------------ timing guards --
+const baseAttempt = {
+  reasoning: 'I need to check the parameters carefully.',
+  ttft: null,
+  tps: null,
+  score: 0.5,
+};
+const baseResult = classify(baseAttempt.reasoning, false);
+
+// TPS checks
+const tpsDiscard = wantsDiscard(
+  { ...baseAttempt, tps: 85.0 },
+  baseResult,
+  { discardChinese: false, discardAboveTps: true, maxTps: 60 },
+);
+check(tpsDiscard === 'tps', `high TPS (85 > 60) triggers discard: ${tpsDiscard}`);
+
+const tpsKeep = wantsDiscard(
+  { ...baseAttempt, tps: 45.0 },
+  baseResult,
+  { discardChinese: false, discardAboveTps: true, maxTps: 60, minOpenings: 4, paragraphWindow: 10 },
+);
+check(tpsKeep === null, `normal rollout TPS (45 <= 60) is not discarded by TPS: ${tpsKeep}`);
+
+const tpsDisabled = wantsDiscard(
+  { ...baseAttempt, tps: 120.0 },
+  baseResult,
+  { discardChinese: false, discardAboveTps: false, maxTps: 60, minOpenings: 4, paragraphWindow: 10 },
+);
+check(tpsDisabled === null, `high TPS is ignored when toggle is off: ${tpsDisabled}`);
+
+// TTFT checks
+const ttftFastDiscard = wantsDiscard(
+  { ...baseAttempt, ttft: 0.8 },
+  baseResult,
+  { discardChinese: false, discardBelowTtft: true, minTtft: 2.0 },
+);
+check(ttftFastDiscard === 'ttft_fast', `fast first token (0.8s < 2.0s) triggers discard: ${ttftFastDiscard}`);
+
+const ttftFastKeep = wantsDiscard(
+  { ...baseAttempt, ttft: 2.4 },
+  baseResult,
+  { discardChinese: false, discardBelowTtft: true, minTtft: 2.0, minOpenings: 4, paragraphWindow: 10 },
+);
+check(ttftFastKeep === null, `sufficient TTFT (2.4s >= 2.0s) is not discarded: ${ttftFastKeep}`);
+
 // ------------------------------------------------------------ config guard --
 // `delete-all` removes every session attached to the probe folder, so a folder
 // that overlaps the harness state directory, the home directory or a drive
@@ -251,6 +163,8 @@ function rejects(folder, label) {
 // The shipped default has to survive its own guard.
 const fallback = sanitizeConfig({ prompt: 'x' });
 check(path.isAbsolute(fallback.folder), `the default folder is accepted: ${fallback.folder}`);
+check(fallback.discardAboveTps === false && fallback.maxTps === 60, `default TPS config intact (maxTps=${fallback.maxTps})`);
+check(fallback.discardBelowTtft === false && fallback.minTtft === 2.0, `default minTtft config intact (minTtft=${fallback.minTtft})`);
 
 rejects(path.parse(os.homedir()).root, 'filesystem root');
 rejects(os.homedir(), 'home directory');
@@ -258,9 +172,19 @@ rejects(path.join(os.homedir(), '.dsh'), 'harness state directory');
 rejects(path.join(os.homedir(), '.dsh', 'sessions'), 'inside the harness state directory');
 rejects('relative/path', 'relative path');
 
-const good = sanitizeConfig({ prompt: 'x', folder: OK_FOLDER, concurrency: 99, keepAbove: 0.8 });
+const good = sanitizeConfig({
+  prompt: 'x',
+  folder: OK_FOLDER,
+  concurrency: 99,
+  keepAbove: 0.8,
+  discardAboveTps: true,
+  maxTps: 55,
+  discardBelowTtft: true,
+  minTtft: 2.5,
+});
 check(good.folder === path.resolve(OK_FOLDER), `folder accepted and resolved: ${good.folder}`);
 check(good.concurrency === 6, `concurrency clamped to ${good.concurrency} (max 6)`);
+check(good.maxTps === 55 && good.minTtft === 2.5, 'custom timing config sanitized and retained');
 
 let inverted = false;
 try { sanitizeConfig({ prompt: 'x', folder: OK_FOLDER, keepAbove: 0.5, discardBelow: 0.6 }); } catch (e) { inverted = true; }

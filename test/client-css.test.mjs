@@ -32,13 +32,26 @@ check(
   'the unsafe fixed right inset cannot return unnoticed',
 );
 check(
-  source.includes('.rsc-left{width:340px;flex:none;overflow-y:auto;padding:18px 20px 40px;margin-bottom:110px;'),
-  'console controls leave the sidebar footer toggle zone clear',
+  source.includes(".rsc-leftwrap{width:340px;flex:none;min-height:0;display:flex;flex-direction:column;")
+    && source.includes(".rsc-left{flex:1;min-height:0;overflow-y:auto;padding:18px 20px 30px;"),
+  'the settings column scrolls inside a fixed-width shell, so the action footer stays put',
 );
 check(
   source.includes("g.document.querySelector('.rsc-seat')")
     && source.includes('onClick: props.onSurfaceClick'),
   'the console forwards clicks through the live launcher rectangle',
+);
+
+// position:fixed only means "the viewport" while nothing above it establishes
+// a containing block. Mounting on <body> is what makes the full-frame surface
+// independent of whatever the shell and its other plugins put in the tree.
+check(
+  source.includes("require('react-dom')") && source.includes('reactDom.createPortal(view, body)'),
+  'the console mounts on document.body rather than inside the shell overlay layer',
+);
+check(
+  built.includes('createPortal'),
+  'the generated client ships the portal',
 );
 
 console.log(`\n${checks - failed}/${checks} passed`);

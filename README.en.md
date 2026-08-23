@@ -33,8 +33,14 @@ Two signals are decisive, and they are deliberately **asymmetric**:
 When neither fires, the remaining openings feed a score:
 
 ```
-confidence = (positive openings + 1) / (classified openings + 2)
+bonus      = (even paragraphs ? 1 : 0) + (any stall ? 1 : 0)
+confidence = (positive openings + bonus + 1) / (classified openings + bonus + 2)
 ```
+
+The bonus counts the summariser's shape as evidence in its own right, so a
+chain-of-thought with even paragraphs and a stall reads above 50% before a single
+opening has been classified. It only moves the number: keeping still needs
+`Min. openings` real openings behind it.
 
 A paragraph opening is scored as soon as 48 characters have arrived, even if the model never inserts a newline. `Let me` later in the chain-of-thought **overrides** an earlier keep.
 
@@ -50,6 +56,10 @@ Positive openings are the first-person **singular** planning voice — `I'm`, `I
 
 A probe is discarded below `discard below` (0.35) and kept above `keep above` (0.7), but only once `min. openings` (4) have been classified. One that opens ten paragraphs without a single positive is given up on, and a chain-of-thought that is **mostly Chinese** (80%+ of its letters) is discarded on sight — quoting a Chinese prompt inside English reasoning does not count.
 
+To leverage latency and throughput characteristics of rollout pipelines, two early-discard filters are available:
+- **Maximum TPS limit**: Rollout models often generate at ~40–50 chunks/s, whereas old models stream significantly faster. Once streaming throughput exceeds the limit (default 60 chunks/s), the probe is discarded immediately.
+- **Minimum First-Token Latency (TTFT)**: Old models often start streaming very quickly (< 1–2s). Set a minimum TTFT threshold (default 2.0s) to discard probes that respond too fast right on the first token.
+
 The classifier is covered by tests over hand-labelled transcripts, alongside tests for the route guards, the launch loop's failure behaviour, and the rules about deleting sessions:
 
 ```bash
@@ -60,17 +70,29 @@ npm test
 
 **Rollout Scout** sits at the sidebar foot, beside Settings, and opens the full-frame console described below. It is a `sidebar.footer.action` entry, so it matches the shell's own rows and collapses to a single icon when the sidebar folds to the rail.
 
-**Left** — the probe prompt, model (default V4-Pro / High), concurrency, folder, the scoring thresholds, and toggles: auto-pause on a strong match, discard Chinese reasoning, delete old-model probes from disk.
+**Left** — the probe prompt, model (default V4-Pro / High), concurrency, folder, and the four scoring thresholds. Below them sits the self-check, then the switches: TPS speed limit, first-token latency window, auto-pause on a strong match, discard Chinese reasoning, delete old-model probes from disk. The long explanation of the scoring rules folds away behind **How scoring works** rather than sitting between the controls.
+
+The actions live in a footer under the column, so they stay put while the settings scroll, and are ordered by weight: **Start** / **Pause** on its own, **Force stop** and **Clear finished** beside each other, and **Delete all sessions** as plain text — it should not look like something you press by accident.
+
+Under the scoring thresholds sits a **self-check**: `Self-check 13/13 · known rollout samples kept 5/5`. It runs thirteen hand-labelled chains-of-thought through the same classifier a live probe goes through, under whatever settings are currently in the form — no tokens, no probes. Tighten `Keep above` past what a labelled catch can reach and it turns amber and names the samples you just excluded. It is how you tell *nothing found* apart from *nothing findable*, which otherwise look identical from the console.
 
 **Right** — launched / live / kept / discarded / best score, above a queue in launch order that never jumps. Each row has a score meter, matched phrases, and a preview. Click a card to open the conversation — it keeps running. Hover means you need it: putting the mouse on a fading card rescues it.
 
-**Start** becomes **Pause**, which stops launching while letting probes already in flight reach their own verdict, then **Resume**. **Force stop** aborts everything mid-thought.
+**Start** asks you to check your notifications first — a run opens a lot of conversations, and DSH Desktop can announce every one of them. Probe prompts are sent as plugin messages so they raise no toast of their own, and the dialog shows whether desktop notifications are on and offers to switch them off. Tick **Do not show this again** to skip it in future.
+
+**Start** becomes **Pause**, which stops launching, cancels the probes already judged as the old model, and lets the undecided ones reach their own verdict. Then **Resume**. **Force stop** aborts everything still in flight.
 
 A probe judged old fades for about 3 seconds (a thin line at the bottom of the card) while the turn is still running, then cancels. Hover or click during the fade keeps it.
 
+**Keep** on any card takes that conversation out of reach of everything else in the console: it is never faded, cancelled, swept or deleted, and the promise survives a plugin reload. Probes that finish as a confident catch are kept automatically. Click **Kept** again to hand one back to the ordinary rules.
+
+Probes are named in the sidebar as you go — `Rollout probe 12` while running, and `★ Rollout catch 12 · 87%` once one is caught, so a hit is obvious in a list full of probes. **Rename** on a kept card lets you name it yourself; naming one keeps it.
+
 **Clear finished** removes completed probes from the list *and* deletes those conversations from disk. **Delete all sessions** wipes every probe in the folder — including ones already cleared from the list — and resets numbering so the next run starts at probe 1.
 
-Both refuse to touch a probe that is still streaming. Pause stops launching but leaves probes in flight, so **Delete all sessions** asks you to **Force stop** first rather than unlinking a log that is still being written to. The probe folder may not be your home directory, a drive root, or anywhere inside `~/.dsh` — deleting is scoped to that folder, and those would put unrelated conversations in its path.
+If probe conversations turn up in the folder that the console is not tracking — left by a plugin reload, an upgrade, or an app restart — a banner offers to **sweep** them. Those are the ones that otherwise sit in the sidebar with no way to remove them, since the shell's own menu offers Archive but not Delete.
+
+Both refuse to touch a probe that is still streaming, except a kept one — that stays live on purpose, so it does not hold up a delete. Pause stops launching but leaves probes in flight, so **Delete all sessions** asks you to **Force stop** first rather than unlinking a log that is still being written to. The probe folder may not be your home directory, a drive root, or anywhere inside `~/.dsh` — deleting is scoped to that folder, and those would put unrelated conversations in its path.
 
 If three probes in a row fail to even start — provider unreachable, folder unwritable — the run stops itself and reports the error instead of relaunching into the same failure forever. **Resume** tries again.
 
@@ -91,10 +113,13 @@ Not on npm yet, so install from the repository. `lib/client.js` is a generated b
 ## How it works
 
 - The host half serves `/rollout-scout` and creates each probe as a brand-new session with `ctx.agents.create` (no seed), setting model and reasoning effort through `installModelSelection`.
+- Probe prompts are sent as plugin-sourced messages, which is what keeps a run from announcing itself once per probe.
 - It subscribes to `session/event` scoped to that one agent and reads `reasoning-delta` chunks off `assistant/chunk` — the chain-of-thought as it streams — classifying on every chunk.
 - A verdict against calls `agent.cancel` to interrupt the turn; a verdict for lets it run to `turn/end`. While streaming, the last paragraph is withheld because its opening may be half-written; at turn end the complete text is re-classified.
 - Probes are created in the folder you choose, which becomes a workspace. Old-model probes can be deleted from disk.
 - `/rollout-scout` listens on a local port, so it is guarded like one: writes require an `application/json` content type (which forces a CORS preflight that is never answered) and a cross-origin `Origin` is refused. A page you happen to be visiting cannot make it start or delete anything.
+
+Implementation notes live in [`docs/`](docs/) — [architecture](docs/architecture.md) and the [harness behaviour this depends on](docs/dsh-host-notes.md).
 
 ## Compatibility
 
