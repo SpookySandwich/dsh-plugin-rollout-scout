@@ -257,6 +257,16 @@ r = await send('POST', JSON.stringify({
 check(r.body.rolloutKept < r.body.rolloutTotal,
   `a stricter keep mark drops known catches (${r.body.rolloutKept}/${r.body.rolloutTotal})`);
 
+/* ------------------------------------------------------------- disposers -- */
+
+// The agent handle's disposer is the exact Cordis effect disposer, and a
+// repeat call returns undefined rather than a promise. Chaining .catch()
+// straight onto it therefore throws inside the disposal dispatch, which the
+// harness reports as "agent/disposed listener threw".
+const hostSource = await fs.readFile(new URL('../lib/index.js', import.meta.url), 'utf8');
+check(!/\.dispose\(\)\s*\.catch/.test(hostSource),
+  'nothing chains directly onto the agent disposer');
+
 await fs.rm(FOLDER, { recursive: true, force: true });
 
 console.log(`\n${checks - failed}/${checks} passed`);
