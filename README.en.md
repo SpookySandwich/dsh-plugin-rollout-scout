@@ -77,7 +77,7 @@ The actions live in a footer under the column, so they stay put while the settin
 
 Under the scoring thresholds sits a **self-check**: `Self-check 13/13 · known rollout samples kept 5/5`. It runs thirteen hand-labelled chains-of-thought through the same classifier a live probe goes through, under whatever settings are currently in the form — no tokens, no probes. Tighten `Keep above` past what a labelled catch can reach and it turns amber and names the samples you just excluded. It is how you tell *nothing found* apart from *nothing findable*, which otherwise look identical from the console.
 
-**Right** — launched / live / kept / discarded / best score, above a queue in launch order that never jumps. Each row has a score meter, matched phrases, and a preview. Click a card to open the conversation. Putting the mouse on a fading card rescues it for as long as you hover; to keep a probe for good, press **Keep**.
+**Right** — launched / live / kept / discarded / best score, above a queue in launch order that never jumps. Each row has a score meter, matched phrases, and a preview. Click a card to open the conversation. Putting the mouse on a fading card rescues it; clicking straight into the conversation carries that rescue across the transition until the pointer moves again. To keep a probe for good, press **Keep**.
 
 **Start** asks you to check your notifications first — a run opens a lot of conversations, and DSH Desktop can announce every one of them. Probe prompts are sent as plugin messages so they raise no toast of their own, and the dialog shows whether desktop notifications are on and offers to switch them off. Tick **Do not show this again** to skip it in future.
 

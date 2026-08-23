@@ -223,7 +223,9 @@ const hovered = view.attempts[0];
 await send('POST', '{"action":"pause"}');
 think(hovered.sessionId, 'The directory is empty. Let me inspect it first.\n');
 await until((state) => state.attempts[0].status === 'pending-discard');
-await send('POST', JSON.stringify({ action: 'hold', id: hovered.id, lease: 'mouse-1' }));
+response = await send('POST', JSON.stringify({ action: 'hold', id: hovered.id, lease: 'mouse-1' }));
+check(response.body.attempts[0].held && response.body.attempts[0].status === 'streaming',
+  'hover itself keeps a fading conversation alive');
 event(hovered.sessionId, { type: 'turn/end' });
 await until((state) => state.active === 0);
 response = await send('POST', JSON.stringify({ action: 'release', id: hovered.id, lease: 'mouse-1' }));

@@ -31,8 +31,10 @@ it is), and flags. The interesting states:
 
 `pending-discard` exists so a wrong verdict is recoverable: the card fades for
 `FADE_MS` before `commitDiscard` actually cancels. Hovering holds the fade for
-exactly as long as the pointer stays; release re-offers it. The hold is a
-transient — a probe survives the run only through `protect`.
+exactly as long as the pointer stays. Clicking the card transfers that lease
+across the console-to-conversation transition; the next real pointer movement
+releases it. The hold is transient — a probe survives cleanup only through
+`protect`.
 
 ## Ownership, stopping, and deletion are separate
 

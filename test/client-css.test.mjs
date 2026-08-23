@@ -64,6 +64,12 @@ check(
   'hover rescue carries a lease so crossed requests cannot leave a card held',
 );
 check(
+  source.includes('carryHoldUntilPointerMoves(a.id, hoverLease.current)')
+    && source.includes("doc.addEventListener('pointermove', record.release")
+    && source.includes('!carried.current && props.onRelease'),
+  'opening a hovered conversation carries its lease until the pointer moves inside',
+);
+check(
   source.includes("disabled: liveCount === 0")
     && !source.includes("title: t('forceStopHint'), disabled: blocking === 0"),
   'Force stop stays available for a protected live conversation',
