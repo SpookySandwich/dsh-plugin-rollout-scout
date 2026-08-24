@@ -5,9 +5,8 @@
 //     the undecided ones streaming;
 //   - a kept probe is outside every cohort — force stop, clear and delete-all
 //     all run without touching it or its log;
-//   - a sweep finds probe conversations by their recorded `cwd`, so a session
-//     with a log but no workspace slot (the state that leaves an ungrouped,
-//     undeletable sidebar row) is still reachable.
+//   - a sweep relies on durable plugin ownership, never a matching `cwd`, so
+//     an ordinary conversation in the rollout folder remains untouched.
 //
 //   node test/lifecycle.test.mjs
 import fs from 'node:fs/promises';
@@ -162,6 +161,8 @@ check(r.status === 200, `protect accepted (${r.status})`);
 check(r.body.attempts.find((a) => a.id === keeper.id).protected, 'the probe reports as kept');
 
 const promises = JSON.parse(await fs.readFile(path.join(FOLDER, '.rollout-scout.json'), 'utf8'));
+check(promises.version === 3 && ids.every((id) => promises.owned.includes(id)),
+  'every generated session is durably owned before cleanup can target it');
 check(promises.protected.includes(ids[1]), 'the promise is on disk, so it outlives a reload');
 
 cancelled.delete(ids[1]);
@@ -180,15 +181,14 @@ check(await exists(ids[1]), 'delete-all left the kept log on disk');
 check(!(await exists(ids[0])), 'and removed the discarded one');
 check(r.body.attempts.length === 1, `only the keep is still listed (${r.body.attempts.length})`);
 
-/* ------------------------------------------ sweeps find sessions by their cwd -- */
+/* ---------------------------------------- cwd never establishes ownership -- */
 
-// A conversation with a log and no workspace slot: what a half-finished
-// delete used to leave behind, and what the sidebar shows as an ungrouped
-// row with no Delete in its menu.
+// A person can create an ordinary conversation in the rollout folder. Its cwd
+// and log path are lookup data, never authority for this plugin to delete it.
 await writeLog('session-stray');
 r = await send('POST', '{"action":"reap"}');
 check(r.status === 200, `reap accepted (${r.status})`);
-check(!(await exists('session-stray')), 'the untracked conversation was swept');
+check(await exists('session-stray'), 'an unowned same-cwd conversation is untouched');
 check(await exists(ids[1]), 'and the keep still survived that too');
 
 r = await send('POST', JSON.stringify({ action: 'unprotect', id: keeper.id }));
@@ -237,7 +237,7 @@ check(await exists(doomed.sessionId), 'autoDelete did not unlink the conversatio
 
 /* ---------------------------------------------------------------- naming -- */
 
-check(titles.get(doomed.sessionId) === `Rollout probe ${doomed.id}`,
+check(titles.get(doomed.sessionId) === `Rollout probe ${doomed.number}`,
   `probes are named on launch (${titles.get(doomed.sessionId)})`);
 
 r = await send('POST', JSON.stringify({ action: 'rename', id: doomed.id, title: '  V4 catch  ' }));
@@ -267,10 +267,15 @@ think(grazed.sessionId, 'The scene is simple. Let me sketch the geometry first b
 view = await until((s) => s.attempts[0].status === 'pending-discard');
 check(view.attempts[0].status === 'pending-discard', 'the probe is fading');
 
-r = await send('POST', JSON.stringify({ action: 'hold', id: grazed.id }));
-check(r.status === 200 && !r.body.attempts[0].protected,
+const grazeLease = 'lifecycle-hover';
+r = await send('POST', JSON.stringify({
+  action: 'hold', id: grazed.id, lease: grazeLease, mode: 'claim',
+  enteredAt: Date.now(), observedDiscardAt: view.attempts[0].discardAt,
+}));
+check(r.status === 200 && r.body.review?.accepted === true
+    && r.body.attempts[0].held && !r.body.attempts[0].protected,
   'hovering rescues the fade without protecting anything');
-r = await send('POST', JSON.stringify({ action: 'release', id: grazed.id }));
+r = await send('POST', JSON.stringify({ action: 'release', id: grazed.id, lease: grazeLease }));
 check(r.status === 200 && r.body.attempts[0].status === 'pending-discard',
   'leaving hands the rescue back');
 

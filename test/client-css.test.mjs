@@ -59,20 +59,113 @@ check(
   'every host-side deletion, including auto-delete, can refresh the sidebar baseline',
 );
 check(
-  source.includes("call('hold', { id: id, lease: lease })")
-    && source.includes("call('release', { id: id, lease: lease })"),
-  'hover rescue carries a lease so crossed requests cannot leave a card held',
+  source.includes("return call('hold', Object.assign({ id: id, lease: lease }, claim));")
+    && source.includes('enteredAt: enteredAt,')
+    && source.includes('observedDiscardAt: observedDiscardAt,')
+    && source.includes('a.discardAt === null || a.discardAt === undefined')
+    && source.includes('bestEffortRelease()'),
+  'hover rescue sends one fully described claim and a release tombstone',
 );
 check(
-  source.includes('carryHoldUntilPointerMoves(a.id, hoverLease.current)')
+  source.includes('carryHoldUntilPointerMoves(review)')
     && source.includes("doc.addEventListener('pointermove', record.release")
-    && source.includes('!carried.current && props.onRelease'),
-  'opening a hovered conversation carries its lease until the pointer moves inside',
+    && source.includes('unsubscribe = review.onClose(detach);')
+    && source.includes('review.useTransport({'),
+  'opening a hovered conversation carries the same epoch until the pointer moves inside',
 );
 check(
   source.includes("disabled: liveCount === 0")
     && !source.includes("title: t('forceStopHint'), disabled: blocking === 0"),
   'Force stop stays available for a protected live conversation',
+);
+check(
+  source.includes("retention.durability === 'failed'")
+    && source.includes("retention.operation === 'unprotect'")
+    && source.includes("t(unkeepTransition ? 'unprotectRetry' : 'protectRetry')")
+    && source.includes('props.onProtect(a.id, protectionAction)'),
+  'a failed Keep or Unkeep exposes the matching retry action instead of toggling backwards',
+);
+check(
+  source.includes('const appliedRevision = React.useRef(-1)')
+    && source.includes('revision < appliedRevision.current')
+    && source.includes('if (e && e.state) applyState(e.state)')
+    && !source.includes('function ticket()'),
+  'host snapshot revisions prevent poll/action response order from repainting stale state',
+);
+check(
+  source.includes("remote.note === 'paused-culled'\n          ? t('notePausedCulled', { count: remote.culled || 0 })")
+    && source.includes("remote.note === 'reaped'\n          ? t('noteReaped', { count: remote.reaped || 0 })"),
+  'Pause culls and orphan cleanup remain distinct user-facing outcomes',
+);
+check(
+  source.includes('const HOLD_REFRESH_MS = 10_000')
+    && source.includes("request('heartbeat')")
+    && source.includes("if (mode === 'claim' && phase === 'claiming')")
+    && source.includes('refresh = setInterval(function ()')
+    && source.includes('clearInterval(refresh)'),
+  'stationary and carried reviews heartbeat only after their initial claim ACK',
+);
+check(
+  source.includes('const [visualAnchor, setVisualAnchor] = React.useState(null)')
+    && source.includes('const visualAnchorRef = React.useRef(null)')
+    && source.includes('const queueScrollRef = React.useRef(null)')
+    && source.includes('React.useLayoutEffect(function ()')
+    && source.includes('scroller.scrollTop += delta')
+    && source.includes('(current.offset || 0) - residual')
+    && source.includes("style: props.anchor ? { paddingBottom: '100vh' } : undefined")
+    && source.includes('anchor: visualAnchor')
+    && !source.includes('queueSnapshot')
+    && !source.includes('visualHolds')
+    && source.includes('onVisualHold: beginVisualHold')
+    && source.includes('onVisualRelease: endVisualHold')
+    && source.includes('onMouseEnter: props.onVisualHold')
+    && source.includes('props.onVisualHold(a.id, hoverLease.current, event.currentTarget);')
+    && !source.includes('const RESCUABLE')
+    && source.includes('const reviewEpoch = React.useRef(null);')
+    && source.includes('const review = createReviewLease({')
+    && source.includes('if (reviewEpoch.current !== rejected) return;')
+    && source.includes("if (review.phase === 'rejected') return false;")
+    && source.includes('if (review === reviewEpoch.current && pending === review.latestAck)')
+    && source.includes('boundedReviewAck(function ()')
+    && !source.includes('value !== null')
+    && source.includes('&& !(await waitForCurrentReview())) return;')
+    && source.includes('return value;')
+    && source.includes('return null;')
+    && source.includes('onMouseLeave: props.onVisualRelease ? endHover : undefined'),
+  'only the hovered row is viewport-anchored while the canonical queue keeps moving',
+);
+check(
+  source.includes("const shownStatus = anchored && !a.protected ? 'hovered' : a.status")
+    && source.includes("status_hovered: 'pinned'")
+    && source.includes("status_hovered: '固定中'")
+    && source.includes('&& !a.protected && !a.held && !anchored')
+    && source.includes("'data-anchored': anchored ? '' : undefined")
+    && source.includes('.rsc-item[data-anchored]{animation:none;opacity:1;'),
+  'local hover immediately cancels fading without hiding a retained card state',
+);
+check(
+  source.includes('const showRetentionControl = a.protected || anchored || retentionPending || retentionFailed;')
+    && source.includes("showRetentionControl ? React.createElement('button', {")
+    && built.includes('const showRetentionControl = a.protected || anchored || retentionPending || retentionFailed;')
+    && built.includes("showRetentionControl ? React.createElement('button', {")
+    && !source.includes("status_hovered: '悬停固定'"),
+  'ordinary rows hide Keep while fixed, retained, and recovery states expose it',
+);
+check(
+  source.includes("var(--rsc-fade-ms,3200ms)")
+    && source.includes('if (a.discardAt === null || a.discardAt === undefined) return null;')
+    && source.includes('}, [a.discardAt]);')
+    && source.includes("cardStyle['--rsc-fade-ms'] = fadeDurationMs + 'ms';")
+    && source.includes("'status_pending-discard': 'fading'")
+    && source.includes("'status_pending-discard': '淡出中'")
+    && !source.includes('animation:rsc-row-out 3200ms')
+    && built.includes("var(--rsc-fade-ms,3200ms)")
+    && built.includes('}, [a.discardAt]);'),
+  'host discard deadlines drive one memoized fade animation instead of every poll restarting it',
+);
+check(
+  source.includes('overflow-anchor:none;scrollbar-gutter:stable'),
+  'browser scroll anchoring and scrollbar reflow cannot fight the explicit row anchor',
 );
 
 console.log(`\n${checks - failed}/${checks} passed`);

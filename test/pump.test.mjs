@@ -88,6 +88,13 @@ check(typeof view.lastError === 'string' && view.lastError.includes('workspace u
 check(view.launched <= 8, `launching stopped after ${view.launched} attempts`);
 check(view.attempts.every((a) => a.status === 'error'), 'every attempt is recorded as an error');
 check(view.active === 0, `no attempt is left counted as live (active=${view.active})`);
+const noSessionAttempt = view.attempts.find((attempt) => attempt.sessionId === null);
+r = await send('POST', JSON.stringify({ action: 'protect', id: noSessionAttempt.id }));
+check(r.status === 409 && r.body.error.includes('no conversation to keep'),
+  'Keep rejects a terminal launch failure with no conversation');
+check(r.body.state.attempts.find((attempt) => attempt.id === noSessionAttempt.id)
+  ?.retention.durability === 'none',
+  'the rejected Keep cannot leave a permanent pending retention state');
 
 // Resume is the user saying "try again": it must re-arm, then trip again.
 const before = view.launched;

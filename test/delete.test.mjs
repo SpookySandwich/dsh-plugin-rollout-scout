@@ -28,12 +28,24 @@ function check(ok, message) {
 // emitted, so every one of them stays live.
 const removed = [];
 let locateFails = false;
+let detachFails = false;
+let detachGate = null;
+const detachCalls = new Map();
+const listeners = new Map();
 const attached = new Set();
 const workspace = {
   path: FOLDER,
   get sessionIds() { return [...attached]; },
   attachSession: async (id) => { attached.add(id); },
-  detachSession: async (id) => { attached.delete(id); },
+  detachSession: async (id) => {
+    detachCalls.set(id, (detachCalls.get(id) ?? 0) + 1);
+    if (detachFails) throw new Error('workspace unavailable');
+    if (detachGate?.id === id) {
+      detachGate.entered.resolve();
+      await detachGate.release.promise;
+    }
+    attached.delete(id);
+  },
 };
 
 const routes = [];
@@ -46,9 +58,12 @@ apply({
     create: async () => workspace,
   },
   agents: {
-    create: async ({ setup }) => {
-      setup({ on() {} });
-      return { agent: { followup() {}, cancel() {} }, dispose: async () => {} };
+    create: async ({ sessionId, setup }) => {
+      setup({ on(name, listener) {
+        if (name === 'session/event') listeners.set(sessionId, listener);
+      } });
+      const agent = { status: 'running', followup() {}, cancel() { agent.status = 'idle'; } };
+      return { agent, dispose: async () => { agent.status = 'idle'; } };
     },
   },
   sessionPersistence: {
@@ -81,6 +96,10 @@ async function until(predicate, timeoutMs = 5000) {
     if (predicate(r.body) || Date.now() > deadline) return r.body;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
+}
+
+function event(sessionId, value) {
+  listeners.get(sessionId)?.(null, value);
 }
 
 let r = await send('POST', JSON.stringify({
@@ -134,6 +153,9 @@ check(r.body.attempts.length === 0 && r.body.launched === 0, 'the list and the c
 const gone = await Promise.all(liveIds.map((id) =>
   fs.readFile(path.join(FOLDER, 'sessions', id, 'session.jsonl'), 'utf8').then(() => false, () => true)));
 check(gone.every(Boolean), 'and the session logs are gone from disk');
+let manifest = JSON.parse(await fs.readFile(path.join(FOLDER, '.rollout-scout.json'), 'utf8'));
+check(manifest.version === 3 && manifest.owned.length === 0 && manifest.deleting.length === 0,
+  'successful deletion relinquishes durable ownership');
 
 /* ---------------------------------------- failed delete keeps its own card -- */
 
@@ -155,10 +177,80 @@ check(view.attempts.some((attempt) => attempt.id === retryable.id),
   'the failed session keeps its card, so it remains reachable');
 check(await fs.readFile(path.join(FOLDER, 'sessions', retryable.sessionId, 'session.jsonl'), 'utf8').then(() => true, () => false),
   'the failed session log is still intact');
+manifest = JSON.parse(await fs.readFile(path.join(FOLDER, '.rollout-scout.json'), 'utf8'));
+check(manifest.owned.includes(retryable.sessionId),
+  'a failed log deletion retains durable ownership for retry');
+check(manifest.deleting.includes(retryable.sessionId),
+  'the durable deleting transaction records the retry point before touching the log');
 
 locateFails = false;
 r = await send('POST', '{"action":"delete-all"}');
 check(r.status === 200 && r.body.attempts.length === 0, 'retrying deletion succeeds cleanly');
+
+/* ----------------------------- detach failure also retains durable authority -- */
+
+r = await send('POST', JSON.stringify({
+  action: 'start', config: { prompt: 'probe', folder: FOLDER, concurrency: 1 },
+}));
+view = await until((s) => s.attempts.length === 1 && s.attempts[0].status === 'streaming');
+const detachRetry = view.attempts[0];
+await fs.mkdir(path.join(FOLDER, 'sessions', detachRetry.sessionId), { recursive: true });
+await fs.writeFile(path.join(FOLDER, 'sessions', detachRetry.sessionId, 'session.jsonl'), 'live\n');
+await send('POST', '{"action":"force-stop"}');
+await until((s) => s.active === 0);
+
+detachFails = true;
+r = await send('POST', '{"action":"delete-all"}');
+check(r.status === 409, `a workspace detach failure is reported (${r.status})`);
+manifest = JSON.parse(await fs.readFile(path.join(FOLDER, '.rollout-scout.json'), 'utf8'));
+check(manifest.owned.includes(detachRetry.sessionId) && attached.has(detachRetry.sessionId),
+  'an incomplete detach retains both the card and durable ownership');
+check(manifest.deleting.includes(detachRetry.sessionId),
+  'a detach failure also remains inside the durable deleting transaction');
+
+detachFails = false;
+r = await send('POST', '{"action":"delete-all"}');
+manifest = JSON.parse(await fs.readFile(path.join(FOLDER, '.rollout-scout.json'), 'utf8'));
+check(r.status === 200 && !manifest.owned.includes(detachRetry.sessionId),
+  'the idempotent retry completes detachment and relinquishes ownership');
+
+/* ---------------------------- auto-delete and button deletion coalesce -- */
+
+r = await send('POST', JSON.stringify({
+  action: 'start', config: {
+    prompt: 'probe', folder: FOLDER, concurrency: 1, autoDelete: true,
+  },
+}));
+view = await until((s) => s.attempts.length === 1 && s.attempts[0].status === 'streaming');
+const overlapping = view.attempts[0];
+await fs.mkdir(path.join(FOLDER, 'sessions', overlapping.sessionId), { recursive: true });
+await fs.writeFile(path.join(FOLDER, 'sessions', overlapping.sessionId, 'session.jsonl'), 'live\n');
+detachGate = {
+  id: overlapping.sessionId,
+  entered: Promise.withResolvers(),
+  release: Promise.withResolvers(),
+};
+event(overlapping.sessionId, {
+  type: 'assistant/chunk',
+  data: { chunk: { type: 'reasoning-delta', text: 'The directory is empty. Let me inspect every file before editing.\n' } },
+});
+await until((s) => s.attempts[0]?.status === 'pending-discard');
+r = await send('POST', '{"action":"pause"}');
+const revisionBeforeOverlap = r.body.sessionsRevision;
+event(overlapping.sessionId, { type: 'turn/end' });
+await detachGate.entered.promise;
+
+const concurrentDelete = send('POST', '{"action":"delete-all"}');
+await new Promise((resolve) => setImmediate(resolve));
+detachGate.release.resolve();
+r = await concurrentDelete;
+detachGate = null;
+check(r.status === 200 && r.body.attempts.length === 0,
+  'delete-all joins an in-flight auto-delete instead of starting another');
+check(detachCalls.get(overlapping.sessionId) === 1,
+  'the overlapping session crosses the workspace deletion boundary once');
+check(r.body.sessionsRevision === revisionBeforeOverlap + 1,
+  'the coalesced deletion advances the sidebar revision once');
 
 await fs.rm(FOLDER, { recursive: true, force: true });
 

@@ -43,7 +43,11 @@ async function api(method, body) {
     body: JSON.stringify(body),
   });
   const value = await res.json().catch(function () { return {}; });
-  if (!res.ok) throw new Error(value.error || ('HTTP ' + res.status));
+  if (!res.ok) {
+    const error = new Error(value.error || ('HTTP ' + res.status));
+    error.state = value.state;
+    throw error;
+  }
   return value;
 }
 
@@ -67,16 +71,6 @@ function saveForm(form) {
   try { if (g && g.localStorage) g.localStorage.setItem(FORM_KEY, JSON.stringify(form)); } catch (e) {}
 }
 
-// Statuses where the probe can still be discarded, so hovering it is
-// meaningful. Hover on any other card is just a mouse passing over a
-// finished row and must not generate traffic.
-const RESCUABLE = {
-  starting: true,
-  streaming: true,
-  'kept-streaming': true,
-  'pending-discard': true,
-};
-
 const STATUS_TONE = {
   starting: 'wait',
   streaming: 'wait',
@@ -93,9 +87,143 @@ const STATUS_TONE = {
 };
 
 let holdSequence = 0;
+const HOLD_REFRESH_MS = 10_000;
+const HOLD_ACK_TIMEOUT_MS = 1_200;
 function newHoldLease(id) {
   holdSequence += 1;
   return String(id) + ':' + Date.now() + ':' + holdSequence;
+}
+
+function exactReviewAck(value, action, id, lease) {
+  const ack = value && value.review;
+  return !!ack && ack.action === action && ack.id === id
+    && ack.lease === lease && ack.accepted === true;
+}
+
+/**
+ * A public-state response is not proof that the host established a lease.
+ * Resolve only an exact protocol ACK, and bound how long an optimistic local
+ * anchor may wait. A timed-out request can still arrive later, so every
+ * rejection path follows with a release tombstone.
+ */
+function boundedReviewAck(send, action, id, lease) {
+  return new Promise(function (resolve) {
+    let settled = false;
+    const timeout = setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      resolve(false);
+    }, HOLD_ACK_TIMEOUT_MS);
+    Promise.resolve().then(send).then(function (value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve(exactReviewAck(value, action, id, lease));
+    }, function () {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve(false);
+    });
+  });
+}
+
+/**
+ * One hover gesture owns one protocol epoch. Claim, heartbeat, timeout,
+ * rejection and release all converge here, so React rendering and navigation
+ * cannot accidentally invent different lease semantics. A closed epoch is
+ * immutable; delayed responses are therefore harmless by construction.
+ */
+function createReviewLease(options) {
+  const id = options.id;
+  const lease = options.lease;
+  let hold = options.hold;
+  let release = options.release;
+  let phase = 'claiming';
+  let refresh = null;
+  let latestAck = Promise.resolve(false);
+  const closeListeners = new Set();
+  let review = null;
+
+  function closed() {
+    return phase === 'released' || phase === 'rejected';
+  }
+
+  function stopRefresh() {
+    if (refresh === null) return;
+    clearInterval(refresh);
+    refresh = null;
+  }
+
+  function bestEffortRelease() {
+    if (typeof release !== 'function') return;
+    try { Promise.resolve(release(id, lease)).catch(function () {}); } catch (e) {}
+  }
+
+  function close(nextPhase, rejected) {
+    if (closed()) return false;
+    phase = nextPhase;
+    stopRefresh();
+    bestEffortRelease();
+    for (const listener of [...closeListeners]) {
+      try { listener(nextPhase); } catch (e) {}
+    }
+    closeListeners.clear();
+    if (rejected && typeof options.onReject === 'function') {
+      try { options.onReject(review); } catch (e) {}
+    }
+    return true;
+  }
+
+  function request(mode, metadata) {
+    const payload = Object.assign({ mode: mode }, metadata);
+    const pending = boundedReviewAck(function () {
+      if (typeof hold !== 'function') return null;
+      return hold(id, lease, payload);
+    }, 'hold', id, lease);
+    latestAck = pending;
+    pending.then(function (accepted) {
+      if (closed()) return;
+      if (!accepted) {
+        close('rejected', true);
+        return;
+      }
+      if (mode === 'claim' && phase === 'claiming') {
+        phase = 'active';
+        refresh = setInterval(function () {
+          if (phase === 'active') request('heartbeat');
+        }, HOLD_REFRESH_MS);
+      }
+    });
+    return pending;
+  }
+
+  const initialAck = request('claim', {
+    enteredAt: options.enteredAt,
+    observedDiscardAt: options.observedDiscardAt,
+  });
+  review = {
+    id: id,
+    lease: lease,
+    initialAck: initialAck,
+    get latestAck() { return latestAck; },
+    get phase() { return phase; },
+    release: function () { return close('released', false); },
+    useTransport: function (next) {
+      if (next && typeof next.hold === 'function') hold = next.hold;
+      if (next && typeof next.release === 'function') release = next.release;
+    },
+    onClose: function (listener) {
+      if (typeof listener !== 'function') return function () {};
+      if (closed()) {
+        listener(phase);
+        return function () {};
+      }
+      closeListeners.add(listener);
+      return function () { closeListeners.delete(listener); };
+    },
+  };
+  return review;
 }
 
 // Clicking a hovered card removes that card from the DOM before mouseleave can
@@ -103,26 +231,68 @@ function newHoldLease(id) {
 // release it on the next real pointer movement in the conversation. Hover
 // rescues, click keeps the rescue while you land inside, moving gives it back.
 let carriedHold = null;
-function carryHoldUntilPointerMoves(id, lease) {
-  if (typeof lease !== 'string' || lease === '') return;
+function carryHoldUntilPointerMoves(review) {
+  if (!review || typeof review.release !== 'function') return;
   if (carriedHold && carriedHold.release) carriedHold.release();
   const g = realGlobal();
   const doc = g && g.document;
-  if (!g || !doc || typeof doc.addEventListener !== 'function') return;
+  if (!g || !doc || typeof doc.addEventListener !== 'function') {
+    review.release();
+    return;
+  }
+  // The card's state-applying transport may disappear as navigation unmounts
+  // the console. Carried traffic talks directly to the route while preserving
+  // the same epoch and exact-ACK rules.
+  review.useTransport({
+    hold: function (id, lease, claim) {
+      return api('POST', Object.assign({ action: 'hold', id: id, lease: lease }, claim));
+    },
+    release: function (id, lease) {
+      return api('POST', { action: 'release', id: id, lease: lease });
+    },
+  });
   let armed = true;
+  let unsubscribe = function () {};
+  function detach() {
+    if (!armed) return;
+    armed = false;
+    unsubscribe();
+    if (carriedHold === record) carriedHold = null;
+    try { doc.removeEventListener('pointermove', record.release, true); } catch (e) {}
+    try { g.removeEventListener('blur', record.release, true); } catch (e) {}
+  }
   const record = {
     release: function () {
       if (!armed) return;
-      armed = false;
-      if (carriedHold === record) carriedHold = null;
-      try { doc.removeEventListener('pointermove', record.release, true); } catch (e) {}
-      try { g.removeEventListener('blur', record.release, true); } catch (e) {}
-      api('POST', { action: 'release', id: id, lease: lease }).catch(function () {});
+      detach();
+      review.release();
     },
   };
   carriedHold = record;
   doc.addEventListener('pointermove', record.release, { capture: true, once: true });
   try { g.addEventListener('blur', record.release, { capture: true, once: true }); } catch (e) {}
+  unsubscribe = review.onClose(detach);
+}
+
+/**
+ * Restore one row's viewport Y using the scroll container, returning only the
+ * residual that scroll clamping could not absorb. Kept outside React so the
+ * geometry rule can be exercised deterministically in regression tests.
+ */
+function stabilizeVisualAnchor(scroller, anchor) {
+  if (!scroller || !anchor || anchor.top === null) return null;
+  const cards = scroller.querySelectorAll('.rsc-item[data-id]');
+  let card = null;
+  for (let i = 0; i < cards.length; i += 1) {
+    if (cards[i].getAttribute('data-id') === anchor.id) {
+      card = cards[i];
+      break;
+    }
+  }
+  if (!card) return null;
+  const delta = card.getBoundingClientRect().top - anchor.top;
+  if (Math.abs(delta) > 0.5) scroller.scrollTop += delta;
+  return card.getBoundingClientRect().top - anchor.top;
 }
 
 function pct(score) {
@@ -169,7 +339,10 @@ const CSS = [
   '.rsc-cols{flex:1;display:flex;min-height:0}',
   '.rsc-leftwrap{width:340px;flex:none;min-height:0;display:flex;flex-direction:column;border-right:1px solid color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 18%,transparent)}',
   '.rsc-left{flex:1;min-height:0;overflow-y:auto;padding:18px 20px 30px;display:flex;flex-direction:column;gap:13px}',
-  '.rsc-right{flex:1;min-width:0;overflow-y:auto;padding:18px 22px 30px}',
+  // Reserve the scrollbar lane before the list needs it. Otherwise the first
+  // appended probe can narrow every card, reflow evidence above the pointer,
+  // and move a visually frozen row even though its list order did not change.
+  '.rsc-right{flex:1;min-width:0;overflow-y:auto;overflow-anchor:none;scrollbar-gutter:stable;padding:18px 22px 30px}',
 
   /* -- form -------------------------------------------------------------- */
   '.rsc-label{font-size:11.5px;color:var(--dsw-alias-label-tertiary);margin-bottom:4px;display:block}',
@@ -233,10 +406,13 @@ const CSS = [
   '@keyframes rsc-row-out{from{opacity:1}to{opacity:.18}}',
   '@keyframes rsc-leave-line{from{transform:scaleX(1)}to{transform:scaleX(0)}}',
   '.rsc-item{position:relative;overflow:hidden;animation:rsc-row-in 300ms cubic-bezier(.32,.72,0,1) both;padding:11px 13px;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 8%,transparent);border:1px solid transparent}',
-  '.rsc-item[data-leaving]{animation:rsc-row-out 3200ms linear forwards}',
-  '.rsc-item[data-leaving]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--dsw-alias-status-error,#e5484d);transform-origin:left center;animation:rsc-leave-line 3200ms linear forwards}',
+  '.rsc-item[data-leaving]{animation:rsc-row-out var(--rsc-fade-ms,3200ms) linear forwards}',
+  '.rsc-item[data-leaving]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--dsw-alias-status-error,#e5484d);transform-origin:left center;animation:rsc-leave-line var(--rsc-fade-ms,3200ms) linear forwards}',
   '.rsc-item[data-tone=good]{border-color:color-mix(in srgb,#3fbf6f 45%,transparent)}',
   '.rsc-item[data-tone=bad]{opacity:.72}',
+  // Local anchoring must cancel both the entry animation's transform and the
+  // discard animation's opacity immediately, before the host round-trip.
+  '.rsc-item[data-anchored]{animation:none;opacity:1;z-index:1;box-shadow:0 0 0 1px color-mix(in srgb,var(--dsw-alias-accent-primary,#4b8dff) 40%,transparent)}',
   '.rsc-item[data-click]{cursor:pointer}',
   '.rsc-item[data-click]:hover{background:color-mix(in srgb,var(--dsw-alias-label-tertiary,#888) 15%,transparent)}',
   '.rsc-item-head{display:flex;align-items:center;gap:9px}',
@@ -392,8 +568,9 @@ return {
         status_discarded: 'discarded',
         status_finished: 'finished',
         status_error: 'error',
-        'status_pending-discard': 'thinking',
+        'status_pending-discard': 'fading',
         status_pinned: 'watching',
+        status_hovered: 'pinned',
         localeCode: 'en',
         scoringHelp: 'How scoring works',
         selfCheck: 'Self-check {agreed}/{total} · known rollout kept {kept}/{rollout}',
@@ -402,8 +579,14 @@ return {
         selfCheckWant: 'want',
         protect: 'Keep',
         protectOn: 'Kept',
+        protectRetry: 'Retry Keep',
+        unprotectRetry: 'Retry Unkeep',
+        protectPending: 'Keeping…',
+        unprotectPending: 'Unkeeping…',
         protectHint: 'Keep this conversation on disk and exempt it from cleanup. Force stop can still end its active turn.',
         unprotectHint: 'Kept on disk. Click to hand it back to cleanup rules.',
+        protectRetryHint: 'Keep was not written to disk. The conversation is safe in this process; retry before restarting.',
+        unprotectRetryHint: 'Unkeep was not written to disk. The existing Keep remains in force; retry the removal.',
         notePausedCulled: 'Paused. {count} probes already judged as the old model were cancelled; the undecided ones run on.',
         noteReaped: 'Swept {count} untracked probe conversations out of the folder.',
         orphans: '{count} probe conversations in this folder are not tracked by this console.',
@@ -511,8 +694,9 @@ return {
         status_discarded: '已丢弃',
         status_finished: '已结束',
         status_error: '出错',
-        'status_pending-discard': '思考中',
+        'status_pending-discard': '淡出中',
         status_pinned: '看着',
+        status_hovered: '固定中',
         localeCode: 'zh',
         scoringHelp: '评分是怎么算的',
         selfCheck: '自检 {agreed}/{total} · 已知灰度样本保留 {kept}/{rollout}',
@@ -521,8 +705,14 @@ return {
         selfCheckWant: '应为',
         protect: '保留',
         protectOn: '已保留',
+        protectRetry: '重试保留',
+        unprotectRetry: '重试取消保留',
+        protectPending: '正在保留…',
+        unprotectPending: '正在取消…',
         protectHint: '把会话保留在磁盘并排除在清理之外；强制停止仍可结束正在运行的回合。',
         unprotectHint: '已保留在磁盘。点击可交回清理规则。',
+        protectRetryHint: '保留尚未写入磁盘。当前进程内会话仍安全；请在重启前重试。',
+        unprotectRetryHint: '取消保留尚未写入磁盘，原保留仍然有效；请重试取消。',
         notePausedCulled: '已暂停。已判定为旧模型的 {count} 个探测已中止；尚未判定的继续跑完。',
         noteReaped: '已清理该目录下 {count} 个未被跟踪的探测会话。',
         orphans: '该目录下有 {count} 个探测会话不在本控制台的跟踪范围内。',
@@ -606,49 +796,157 @@ return {
       const clickable = !!a.sessionId && !a.deleted && sessions;
       const hits = a.hits || {};
       const hitKeys = Object.keys(hits);
-      const leaving = a.status === 'pending-discard' && !a.protected;
-      // Rescue only applies while the probe is still cancellable; hover on a
-      // finished row must not generate traffic. The hold is released on
-      // unmount too — clicking into a conversation closes the console, so
-      // mouseleave never fires for that card.
-      const rescuable = !!RESCUABLE[a.status] && !a.protected;
+      const retention = a.retention || {};
+      const retentionPending = retention.durability === 'pending';
+      const retentionFailed = retention.durability === 'failed';
+      const unkeepTransition = retention.operation === 'unprotect';
+      const protectionAction = retentionFailed
+        ? !unkeepTransition
+        : !a.protected;
+      const protectionLabel = retentionPending
+        ? t(unkeepTransition ? 'unprotectPending' : 'protectPending')
+        : retentionFailed
+          ? t(unkeepTransition ? 'unprotectRetry' : 'protectRetry')
+          : t(a.protected ? 'protectOn' : 'protect');
+      const protectionHint = retentionFailed
+        ? t(unkeepTransition ? 'unprotectRetryHint' : 'protectRetryHint')
+        : t(a.protected ? 'unprotectHint' : 'protectHint');
+      const retentionBusy = retentionPending || a.deleted;
+      const anchored = !!props.anchored;
+      // Hover and durable retention are independent internally, but the card
+      // projects them into three simple states: ordinary (no control), fixed
+      // (Keep is available), and retained (Kept remains available). Pending
+      // or failed writes also stay visible so recovery is always reachable.
+      const showRetentionControl = a.protected || anchored || retentionPending || retentionFailed;
+      const shownStatus = anchored && !a.protected ? 'hovered' : a.status;
+      const leaving = a.status === 'pending-discard'
+        && !a.protected && !a.held && !anchored;
+      // The host owns the irreversible deadline. Capture the remaining visual
+      // duration only when that absolute deadline changes: ordinary polling
+      // and repeated classifier deltas keep the memo (and CSS animation)
+      // untouched, while mouseleave produces one new resumed deadline.
+      const fadeDurationMs = React.useMemo(function () {
+        if (a.discardAt === null || a.discardAt === undefined) return null;
+        const deadline = Number(a.discardAt);
+        if (!Number.isFinite(deadline)) return null;
+        return Math.max(1, Math.min(3200, deadline - Date.now()));
+      }, [a.discardAt]);
+      const cardStyle = {};
+      if (leaving && fadeDurationMs !== null) {
+        cardStyle['--rsc-fade-ms'] = fadeDurationMs + 'ms';
+      }
+      if (anchored && props.anchorOffset > 0) {
+        cardStyle.marginTop = props.anchorOffset + 'px';
+      }
+      const hasCardStyle = Object.keys(cardStyle).length > 0;
+      // Visual anchoring and host review protection are separate state axes,
+      // but both start at pointer entry. The row is pinned locally before the
+      // request returns; the temporary host lease prevents discard/deletion.
+      // Neither changes durable Keep/Unkeep state.
       const hovered = React.useRef(false);
       const hoverLease = React.useRef(null);
-      const carried = React.useRef(false);
+      const reviewEpoch = React.useRef(null);
+      const reviewHeld = React.useRef(false);
+      function rejectCurrentReview(rejected) {
+        // A delayed L1 rejection has no authority over a later L2 gesture.
+        // The epoch identity, not just the card id, owns local cleanup.
+        if (reviewEpoch.current !== rejected) return;
+        const lease = rejected.lease;
+        reviewEpoch.current = null;
+        reviewHeld.current = false;
+        hoverLease.current = null;
+        hovered.current = false;
+        if (props.onVisualRelease) props.onVisualRelease(a.id, lease);
+      }
+      function beginReview(enteredAt, observedDiscardAt) {
+        if (reviewHeld.current || !hovered.current || !hoverLease.current
+            || !props.onHold) return;
+        reviewHeld.current = true;
+        const review = createReviewLease({
+          id: a.id,
+          lease: hoverLease.current,
+          enteredAt: enteredAt,
+          observedDiscardAt: observedDiscardAt,
+          hold: props.onHold,
+          release: props.onRelease,
+          onReject: rejectCurrentReview,
+        });
+        reviewEpoch.current = review;
+      }
+      async function waitForCurrentReview() {
+        // Pointer leave/re-entry can replace L1 with L2 while L1's request is
+        // still awaiting its response. Follow the ref until the lease and its
+        // latest request are still current at an acknowledgement boundary;
+        // otherwise Unkeep could overtake L2 and delete under the pointer.
+        while (hovered.current && reviewHeld.current) {
+          const review = reviewEpoch.current;
+          if (review === null) return false;
+          const pending = review.latestAck;
+          const acknowledged = await pending;
+          if (review.phase === 'rejected') return false;
+          // Once the pointer leaves, review is no longer the action's safety
+          // precondition; ordinary Unkeep semantics may proceed.
+          if (!hovered.current || !reviewHeld.current) return true;
+          if (review === reviewEpoch.current && pending === review.latestAck) {
+            return acknowledged;
+          }
+        }
+        return true;
+      }
+      function endHover() {
+        if (!hovered.current) return;
+        const lease = hoverLease.current;
+        const review = reviewEpoch.current;
+        hovered.current = false;
+        reviewEpoch.current = null;
+        if (props.onVisualRelease) props.onVisualRelease(a.id, lease);
+        if (review !== null) review.release();
+        reviewHeld.current = false;
+        hoverLease.current = null;
+      }
       React.useEffect(function () {
         return function () {
-          if (hovered.current && !carried.current && props.onRelease) {
-            props.onRelease(a.id, hoverLease.current);
-          }
+          const lease = hoverLease.current;
+          const review = reviewEpoch.current;
+          reviewEpoch.current = null;
+          if (hovered.current && props.onVisualRelease) props.onVisualRelease(a.id, lease);
+          if (review !== null) review.release();
         };
       }, []);
       return React.createElement('div', {
         className: 'rsc-item',
         'data-id': a.id,
         'data-leaving': leaving ? '' : undefined,
+        'data-anchored': anchored ? '' : undefined,
         'data-locked': a.protected ? '' : undefined,
         'data-tone': tone,
         'data-click': clickable || undefined,
+        style: hasCardStyle ? cardStyle : undefined,
         title: clickable ? t('openSession') : undefined,
-        onMouseEnter: rescuable && props.onHold ? function () {
+        onMouseEnter: props.onVisualHold ? function (event) {
+          if (hovered.current) return;
+          const enteredAt = Date.now();
+          const observed = a.discardAt === null || a.discardAt === undefined
+            ? null : Number(a.discardAt);
           hovered.current = true;
           hoverLease.current = newHoldLease(a.id);
-          props.onHold(a.id, hoverLease.current);
+          props.onVisualHold(a.id, hoverLease.current, event.currentTarget);
+          beginReview(enteredAt, observed !== null && Number.isFinite(observed) ? observed : null);
         } : undefined,
-        // Also released when the card is no longer rescuable but the host
-        // still has it held: a probe that finishes under the pointer would
-        // otherwise never see the mouse leave.
-        onMouseLeave: (rescuable || a.held) && props.onRelease
-          ? function () {
-            hovered.current = false;
-            props.onRelease(a.id, hoverLease.current);
-            hoverLease.current = null;
-          }
-          : undefined,
+        // Always end the visual lease. In particular, a host lease may expire
+        // or the card may finish while the pointer is stationary; neither
+        // transition is allowed to strand the local queue in frozen mode.
+        onMouseLeave: props.onVisualRelease ? endHover : undefined,
         onClick: clickable ? function () {
-          if (hovered.current && hoverLease.current) {
-            carried.current = true;
-            carryHoldUntilPointerMoves(a.id, hoverLease.current);
+          const lease = hoverLease.current;
+          const review = reviewEpoch.current;
+          if (hovered.current && lease) {
+            if (props.onVisualRelease) props.onVisualRelease(a.id, lease);
+            hovered.current = false;
+            reviewHeld.current = false;
+            hoverLease.current = null;
+            reviewEpoch.current = null;
+            if (review !== null) carryHoldUntilPointerMoves(review);
           }
           sessions.open(a.sessionId);
           openStore.set(false);
@@ -656,9 +954,9 @@ return {
       },
         React.createElement('div', { className: 'rsc-item-head' },
           React.createElement('span', { className: 'rsc-item-dot', 'data-tone': tone }),
-          React.createElement('span', { className: 'rsc-item-name' }, a.title || t('probe', { id: a.id })),
+          React.createElement('span', { className: 'rsc-item-name' }, a.title || t('probe', { id: a.number })),
           React.createElement('span', { className: 'rsc-item-status' },
-            t('status_' + a.status) + ' · ' + t('chars', { count: a.chars })
+            t('status_' + shownStatus) + ' · ' + t('chars', { count: a.chars })
             + (a.deleted ? ' · ' + t('deleted') : '')),
           a.verdict ? React.createElement('span', {
             className: 'rsc-badge',
@@ -673,16 +971,21 @@ return {
               setNaming(a.title || '');
             },
           }, t('rename')) : null,
-          React.createElement('button', {
+          showRetentionControl ? React.createElement('button', {
             type: 'button',
             className: 'rsc-lock',
             'data-on': a.protected ? '' : undefined,
-            title: a.protected ? t('unprotectHint') : t('protectHint'),
-            onClick: function (event) {
+            disabled: retentionBusy,
+            title: protectionHint,
+            onClick: async function (event) {
               event.stopPropagation();
-              if (props.onProtect) props.onProtect(a.id, !a.protected);
+              if (!retentionBusy && props.onProtect) {
+                if (!protectionAction && reviewHeld.current
+                    && !(await waitForCurrentReview())) return;
+                props.onProtect(a.id, protectionAction);
+              }
             },
-          }, a.protected ? t('protectOn') : t('protect'))
+          }, protectionLabel) : null
         ),
         naming !== null ? React.createElement('input', {
           className: 'rsc-input rsc-rename',
@@ -737,12 +1040,21 @@ return {
       );
     }
 
-    /** Newest first, launch order. Never resorted, so a card stays put. */
+    /** Canonical newest-first rows; ScoutView anchors only the hovered card. */
     function ProbeQueue(props) {
-      return React.createElement('div', { className: 'rsc-list' },
+      return React.createElement('div', {
+        className: 'rsc-list',
+        // Give scroll compensation room even when the list is shorter than
+        // the viewport. It exists only during a hover and vanishes on release.
+        style: props.anchor ? { paddingBottom: '100vh' } : undefined,
+      },
         props.attempts.map(function (a) {
+          const anchored = !!props.anchor && props.anchor.id === a.id;
           return React.createElement(AttemptCard, {
             key: a.id, attempt: a, config: props.config,
+            anchored: anchored,
+            anchorOffset: anchored ? props.anchor.offset : 0,
+            onVisualHold: props.onVisualHold, onVisualRelease: props.onVisualRelease,
             onHold: props.onHold, onRelease: props.onRelease,
             onProtect: props.onProtect, onRename: props.onRename,
           });
@@ -856,28 +1168,67 @@ return {
       const [error, setError] = React.useState(null);
       const [form, setForm] = React.useState(function () { return loadForm(); });
       const [preflight, setPreflight] = React.useState(false);
+      const [visualAnchor, setVisualAnchor] = React.useState(null);
+      const visualAnchorRef = React.useRef(null);
+      const queueScrollRef = React.useRef(null);
 
-      // Every action returns the whole state, and so does the poll. Without
-      // ordering, a poll issued before a hover write could land after it and
-      // paint the pre-write state back over the card. Tickets are handed out
-      // in request order and a reply older than the newest applied is dropped.
-      const seq = React.useRef({ issued: 0, applied: 0 });
-      function ticket() {
-        seq.current.issued += 1;
-        return seq.current.issued;
+      function beginVisualHold(id, lease, element) {
+        const key = typeof lease === 'string' && lease ? lease : String(id);
+        const top = element && typeof element.getBoundingClientRect === 'function'
+          ? element.getBoundingClientRect().top : null;
+        visualAnchorRef.current = { id: id, lease: key, top: top };
+        setVisualAnchor({ id: id, lease: key, offset: 0 });
       }
-      function applyState(at, value) {
-        if (at < seq.current.applied) return;
-        seq.current.applied = at;
+      function endVisualHold(id, lease) {
+        const key = typeof lease === 'string' && lease ? lease : String(id);
+        const active = visualAnchorRef.current;
+        if (active && active.id === id && active.lease === key) {
+          visualAnchorRef.current = null;
+        }
+        setVisualAnchor(function (current) {
+          if (!current || current.id !== id || current.lease !== key) return current;
+          return null;
+        });
+      }
+
+      // Keep exactly one card at the same viewport Y while React applies the
+      // newest canonical queue. Scrolling absorbs insertions/removals above it;
+      // a positive margin is the boundary fallback when scrollTop is already
+      // zero. useLayoutEffect performs both before paint, so the anchored row
+      // does not jump while every other row remains free to reorder/update.
+      React.useLayoutEffect(function () {
+        const anchor = visualAnchorRef.current;
+        const scroller = queueScrollRef.current;
+        const residual = stabilizeVisualAnchor(scroller, anchor);
+        if (residual === null || Math.abs(residual) <= 0.5) return;
+        setVisualAnchor(function (current) {
+          if (!current || current.id !== anchor.id || current.lease !== anchor.lease) {
+            return current;
+          }
+          const offset = Math.max(0, (current.offset || 0) - residual);
+          return Math.abs(offset - (current.offset || 0)) <= 0.5
+            ? current : Object.assign({}, current, { offset: offset });
+        });
+      });
+
+      // The host numbers snapshots when they are constructed. Request issue
+      // order is not authority: a GET started after Keep may still snapshot
+      // before the manifest write finishes. Apply only the newest host view.
+      const appliedRevision = React.useRef(-1);
+      function applyState(value) {
+        const revision = Number(value && value.revision);
+        if (Number.isFinite(revision)) {
+          if (revision < appliedRevision.current) return;
+          appliedRevision.current = revision;
+        }
         setRemote(value);
       }
 
       React.useEffect(function () {
         let alive = true;
         const tick = function () {
-          const at = ticket();
           api('GET').then(function (value) {
-            if (alive) { applyState(at, value); setError(null); }
+            if (alive) { applyState(value); setError(null); }
           }).catch(function (e) {
             if (alive) setError(String(e.message || e));
           });
@@ -919,10 +1270,15 @@ return {
 
       async function call(action, extra) {
         setError(null);
-        const at = ticket();
         try {
-          applyState(at, await api('POST', Object.assign({ action: action }, extra)));
-        } catch (e) { setError(String(e.message || e)); }
+          const value = await api('POST', Object.assign({ action: action }, extra));
+          applyState(value);
+          return value;
+        } catch (e) {
+          if (e && e.state) applyState(e.state);
+          setError(String(e.message || e));
+          return null;
+        }
       }
 
       const note = remote && remote.note === 'hit' ? t('noteHit')
@@ -957,6 +1313,10 @@ return {
       }, 0);
       const queue = attempts
         .filter(function (a) {
+          // A locally anchored row remains rendered until pointer release even
+          // if a crossed host response has already marked it discarded. This
+          // is visual reachability only; it grants no deletion authority.
+          if (visualAnchor && a.id === visualAnchor.id) return true;
           if (a.protected || a.status === 'pending-discard') return true;
           return a.status !== 'discarded';
         });
@@ -1157,7 +1517,7 @@ return {
             }, t('deleteAll'))
           )
           ),
-          React.createElement('div', { className: 'rsc-right' },
+          React.createElement('div', { className: 'rsc-right', ref: queueScrollRef },
             React.createElement('div', { className: 'rsc-stats' },
               React.createElement(Stat, { value: remote ? remote.launched : 0, label: t('statLaunched') }),
               React.createElement(Stat, { value: remote ? remote.active : 0, label: t('statActive') }),
@@ -1182,8 +1542,13 @@ return {
                 discarded > 0 ? t('emptyAllDiscarded', { count: discarded }) : t('empty'))
               : React.createElement(ProbeQueue, {
                 attempts: queue, config: config,
-                onHold: function (id, lease) { call('hold', { id: id, lease: lease }); },
-                onRelease: function (id, lease) { call('release', { id: id, lease: lease }); },
+                anchor: visualAnchor,
+                onVisualHold: beginVisualHold,
+                onVisualRelease: endVisualHold,
+                onHold: function (id, lease, claim) {
+                  return call('hold', Object.assign({ id: id, lease: lease }, claim));
+                },
+                onRelease: function (id, lease) { return call('release', { id: id, lease: lease }); },
                 onProtect: function (id, on) { call(on ? 'protect' : 'unprotect', { id: id }); },
                 onRename: function (id, title) { call('rename', { id: id, title: title }); },
               })

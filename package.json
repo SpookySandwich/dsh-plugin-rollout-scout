@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-rollout-scout",
-  "version": "1.4.1",
+  "version": "1.4.0",
   "description": "Detect which conversation model your DeepSeek Harness account is served: score probe conversations' live chain-of-thought, cancel old-model probes in seconds, keep confident catches.",
   "type": "module",
   "main": "lib/index.js",
@@ -48,7 +48,7 @@
     "prepare": "node _wrap-client.mjs",
     "prepack": "node _wrap-client.mjs",
     "pretest": "node _wrap-client.mjs",
-    "test": "node test/classifier.test.mjs && node test/route.test.mjs && node test/pump.test.mjs && node test/delete.test.mjs && node test/lifecycle.test.mjs && node test/ownership.test.mjs && node test/client-css.test.mjs",
+    "test": "node test/classifier.test.mjs && node test/route.test.mjs && node test/pump.test.mjs && node test/delete.test.mjs && node test/lifecycle.test.mjs && node test/ownership.test.mjs && node test/manifest.test.mjs && node test/manifest-concurrency.test.mjs && node test/manifest-process.test.mjs && node test/history.test.mjs && node test/state-machine.test.mjs && node test/client-review.test.mjs && node test/client-anchor.test.mjs && node test/client-css.test.mjs",
     "check:client": "node _wrap-client.mjs && git diff --exit-code -- lib/client.js"
   }
 }

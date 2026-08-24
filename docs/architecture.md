@@ -17,24 +17,42 @@ probe through `ctx.agents.create` and subscribing to that one agent's
 `session/event`. `reasoning-delta` chunks accumulate into `attempt.reasoning`
 and re-run the classifier on every chunk.
 
-An attempt carries a `status` (what it is doing), a `verdict` (what we think
-it is), and flags. The interesting states:
+An attempt stores independent execution, verdict, discard, retention and
+deletion axes. `status` is a read-only UI projection of those facts. The
+interesting projections are:
 
 | status | meaning |
 | --- | --- |
 | `streaming` | undecided, still thinking |
 | `kept-streaming` | reads as rollout, still thinking, still revisable |
-| `pending-discard` | judged old, fading on the card, turn still running |
+| `pending-discard` | judged old, within its recoverable fade grace |
 | `discarding` | cancelled, waiting on `turn/end` |
 | `stopping` | stop requested, agent creation/teardown still draining |
 | `kept` / `discarded` | closed |
 
-`pending-discard` exists so a wrong verdict is recoverable: the card fades for
-`FADE_MS` before `commitDiscard` actually cancels. Hovering holds the fade for
-exactly as long as the pointer stays. Clicking the card transfers that lease
-across the console-to-conversation transition; the next real pointer movement
-releases it. The hold is transient — a probe survives cleanup only through
-`protect`.
+`pending-discard` exists so a wrong verdict is recoverable. Its first old
+verdict creates one absolute `FADE_MS` deadline; repeated reasoning chunks and
+final evaluation may update evidence but cannot move that deadline. Hovering
+suspends the timer and saves only its unspent remainder. The last explicit
+release resumes that remainder, while a retained card resets the grace
+entirely. The host exposes the active deadline as `discardAt`, allowing the
+client's line animation to use the same remaining duration without polling
+restarting it.
+
+`discardAt` is the visual deadline `D`; the irreversible host commit is
+bounded at `D + 250ms`. Pointer entry sends a claim containing the renderer's
+entry time and the exact `discardAt` it observed. Hold/release use a dedicated
+priority route lane, so neither a manifest load nor an unrelated serialized
+action can consume that local transit allowance. Every response carries an
+exact `{ action, id, lease, accepted, reason }` review ACK. The client starts
+heartbeats only after the initial ACK, and any rejection, malformed ACK or
+timeout closes that immutable lease epoch, clears its visual anchor, and sends
+a release tombstone. An expired or released token can never be resurrected by
+a late heartbeat.
+
+Clicking the card transfers that same temporary review epoch across the
+console-to-conversation transition; the next real pointer movement releases
+it. The hold is transient — a probe survives cleanup only through `protect`.
 
 ## Ownership, stopping, and deletion are separate
 
@@ -104,7 +122,7 @@ locales come out looking different from identical state.
 
 ## Tests
 
-`npm test` runs seven files, no framework, each a script that prints
+`npm test` runs framework-free scripts that print
 `PASS`/`FAIL` lines and exits non-zero:
 
 - `classifier.test.mjs` — the classifier and the config guards, against the
@@ -115,8 +133,12 @@ locales come out looking different from identical state.
 - `lifecycle.test.mjs` — pause culls settled probes, a keep survives every
   destructive path, sweeps find conversations by `cwd`, and the self-check
   reports the corpus honestly under an unreachable threshold
-- `ownership.test.mjs` — stop-during-create, watchdog re-arming, cancellation
-  reapers, protected-stop semantics, and hover leases across `turn/end`
+- `ownership.test.mjs` / `state-machine.test.mjs` — stop-during-create,
+  watchdog convergence, priority review traffic, exact fade/claim boundaries,
+  deletion interleavings, and lease tombstones across `turn/end`
+- `client-review.test.mjs` — executable exact-ACK, timeout, heartbeat,
+  L1-to-L2 generation, and carried-review protocol tests
+- `client-anchor.test.mjs` — deterministic viewport anchoring geometry
 - `client-css.test.mjs` — source-to-artifact checks for shell geometry
 
 The host is driven through the real route handler with a mock `ctx`, so tests
