@@ -3,8 +3,9 @@
 English | [简体中文](README.md)
 
 [![npm](https://img.shields.io/npm/v/dsh-plugin-rollout-scout?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-plugin-rollout-scout)
+[![CI](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.1.1--rc.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.1.2--rc.1-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
 Providers sometimes roll a new conversation model out gradually, so which one you get is luck of the draw. Rollout Scout opens throwaway conversations on your own account, reads each one's chain-of-thought **as it streams**, and scores how the reasoning is written — cancelling the ones that read like the model you already have, and keeping the ones that don't.
@@ -133,6 +134,9 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 Implementation notes live in [`docs/`](docs/) — [architecture](docs/architecture.md) and the [harness behaviour this depends on](docs/dsh-host-notes.md).
 
 ## Compatibility
+
+This release targets DSH `0.1.2-rc.1`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
+
 
 The launcher takes a `sidebar.footer.action` seat (a list slot, so it sits beside any other footer action rather than displacing one) and the console renders on the frame-wide `shell.overlay` layer. Neither is per-session, so it conflicts with no session plugin. Requires a DSH whose sidebar declares that seat; without it the console has no way in. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-no-workspace](https://github.com/SpookySandwich/dsh-plugin-no-workspace) and [dsh-plugin-message-edit](https://github.com/SpookySandwich/dsh-plugin-message-edit).
 

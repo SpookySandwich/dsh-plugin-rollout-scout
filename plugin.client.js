@@ -469,13 +469,14 @@ const CSS = [
 ].join('');
 
 return {
+  inject: ['slots', 'sessions', 'locale'],
   apply(ctx) {
     const slots = ctx.get('slots');
-    if (slots === undefined) return;
+    if (slots === undefined) throw new Error('[dsh-plugin-rollout-scout] Missing DSH slots service; check client dependencies.');
     ctx.effect(function () { return styles.insert(CSS); });
 
-    let sessions = null;
-    try { sessions = ctx.get('sessions'); } catch (e) {}
+    const sessions = ctx.get('sessions');
+    if (!sessions || typeof sessions.open !== 'function') throw new Error('[dsh-plugin-rollout-scout] Missing DSH session navigation service.');
 
     const I18N_NS = 'dsh-plugin-rollout-scout';
     const I18N = {
