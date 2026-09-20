@@ -44,7 +44,7 @@ apply({
   agents: {
     get: (id) => live.get(id)?.agent,
     create: async ({ sessionId, setup }) => {
-      setup({ on(_name, listener) { listeners.set(sessionId, listener); } });
+      setup({ on(name, listener) { if (name === 'session/event') listeners.set(sessionId, listener); } });
       const agent = {
         status: 'running', followup() {},
         cancel() { agent.status = 'idle'; },

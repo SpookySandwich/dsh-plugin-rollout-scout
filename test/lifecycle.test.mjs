@@ -62,7 +62,7 @@ apply({
   agents: {
     get: (id) => (live.has(id) ? { cancel() { cancelled.add(id); } } : undefined),
     create: async ({ sessionId, setup }) => {
-      setup({ on(_event, fn) { listeners.set(sessionId, fn); } });
+      setup({ on(event, fn) { if (event === 'session/event') listeners.set(sessionId, fn); } });
       live.set(sessionId, { id: sessionId, header: { id: sessionId, cwd: FOLDER } });
       return {
         agent: { followup() {}, cancel() { cancelled.add(sessionId); } },

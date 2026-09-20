@@ -24,7 +24,7 @@ test('terminal DSH model errors pause retries and never classify failed probes f
       launches++;
       receivedOptions = options.agentOptions;
       let onEvent;
-      options.setup({ on(_name, fn) { onEvent = fn; return () => {}; } });
+      options.setup({ on(name, fn) { if (name === 'session/event') onEvent = fn; return () => {}; } });
       return {
         dispose: async () => {},
         agent: {

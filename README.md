@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/dsh-plugin-rollout-scout?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-plugin-rollout-scout)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.1.2--rc.1-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.1.5--rc.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
 服务商有时会灰度发布新的对话模型，你分到哪一个全看运气。灰度侦察会用你自己的账号开启一批临时会话，**在思维链流式输出的同时**读取它，并按「推理是怎么写的」打分——读起来像你手上这个旧模型的立刻中止，不像的留下来。
@@ -133,7 +133,13 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 
 ## 兼容性
 
-本次兼容目标为 DSH `0.1.2-rc.1`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
+版本 `1.5.0`：适配 DSH 0.1.5 的 agent/assistant-stream 瞬态流式事件，保留旧事件支持并防止重复计数，兼容持久化列表的新快照结构。
+
+声明兼容范围为 `>=0.1.5-rc.2 <0.1.6-0`；已验证官方 `0.1.5-rc.2`，不声明兼容 `0.1.6` alpha。旧版 DSH 请保留上一插件版本。[验证记录](.github/reviews/dsh-0.1.5.md)。
+
+可从 [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.5.0) 下载发布包，然后执行 `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.5.0.tgz`。
+
+本次兼容目标为 DSH `0.1.5-rc.2`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
 
 
 入口占用 `sidebar.footer.action` 座位（list 类型，会与其它底部操作并排，而不是把谁挤掉），控制台本体渲染在全局 `shell.overlay` 层。两者都不属于会话作用域，因此不与任何会话内插件冲突。需要侧边栏声明了该座位的 DSH 版本；否则控制台将没有入口。与 [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream)、[dsh-plugin-no-workspace](https://github.com/SpookySandwich/dsh-plugin-no-workspace)、[dsh-plugin-message-edit](https://github.com/SpookySandwich/dsh-plugin-message-edit) 同族。

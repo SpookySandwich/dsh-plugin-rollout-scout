@@ -1,5 +1,20 @@
 # DSH host behaviour this plugin relies on
 
+## DSH 0.1.5-rc.2 update (2026-09-20)
+
+Streaming chunks are now process-local `agent/assistant-stream` frames, not
+durable `assistant/chunk` events. The agent-scoped setup installs the frame
+listener before sending a probe, while `session/event` still supplies durable
+turn completion and errors. A per-attempt source choice prevents double
+counting on hosts that expose both feeds. Persistence listings now return
+`{ header, revision, ... }` snapshots; cleanup unwraps `header` before locating
+the JSONL artifact. Cleanup still relies on that backend's `locate` hook;
+backends without it fail visibly instead of guessing a deletion path.
+
+Real-runtime acceptance covers classification, max reasoning effort, auto
+pause, cold rename, protected cleanup, explicit deletion and failure pause.
+The older notes below describe the historical contracts behind other paths.
+
 Notes on harness internals that are not in DSH's own documentation and that
 were read out of `~/.dsh/profiles/node_modules/@deepseek-ai/*` and the DSH
 Desktop bundle. Verified against **dsh 0.1.1-rc.2**. Each entry says what the

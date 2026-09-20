@@ -116,7 +116,7 @@ apply({
     create: async ({ sessionId, setup }) => {
       createCalls += 1;
       if (creationGate !== null) await creationGate.promise;
-      setup({ on(_name, listener) { listeners.set(sessionId, listener); } });
+      setup({ on(name, listener) { if (name === 'session/event') listeners.set(sessionId, listener); } });
       const agent = {
         followup() { prompted.add(sessionId); },
         cancel() { cancelled.add(sessionId); },

@@ -67,10 +67,11 @@ apply({
     },
   },
   sessionPersistence: {
-    list: async () => [...attached].map((id) => ({ id })),
+    list: async () => [...attached].map((id) => ({ header: { id, cwd: FOLDER, qaSnapshot: true }, revision: 'qa' })),
     // Each session lives in its own directory, named for the session.
     locate: (header) => {
       if (locateFails) throw new Error('persistence unavailable');
+      if (!header.qaSnapshot) throw new Error('DSH 0.1.5 snapshot header was not unwrapped');
       return { path: path.join(FOLDER, 'sessions', header.id, 'session.jsonl') };
     },
   },
