@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-rollout-scout",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Detect which conversation model your DeepSeek Harness account is served: score probe conversations' live chain-of-thought, cancel old-model probes in seconds, keep confident catches.",
   "type": "module",
   "main": "lib/index.js",
@@ -64,7 +64,10 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0-0"
+  },
   "engines": {
-    "dsh": ">=0.1.5-rc.2 <0.1.6-0"
+    "dsh": ">=0.2.0-rc.2 <0.3.0-0"
   }
 }

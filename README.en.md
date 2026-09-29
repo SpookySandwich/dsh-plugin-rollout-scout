@@ -5,7 +5,7 @@ English | [简体中文](README.md)
 [![npm](https://img.shields.io/npm/v/dsh-plugin-rollout-scout?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-plugin-rollout-scout)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.1.5--rc.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.2.0--rc.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
 Providers sometimes roll a new conversation model out gradually, so which one you get is luck of the draw. Rollout Scout opens throwaway conversations on your own account, reads each one's chain-of-thought **as it streams**, and scores how the reasoning is written — cancelling the ones that read like the model you already have, and keeping the ones that don't.
@@ -135,13 +135,15 @@ Implementation notes live in [`docs/`](docs/) — [architecture](docs/architectu
 
 ## Compatibility
 
+Version `1.6.0`: Load on official dsh `0.2.0-rc.2`. Probe cleanup still uses `sessionPersistence.locate`, and live scoring still reads `agent/assistant-stream`.
+
 Version `1.5.0`: Consume transient agent/assistant-stream frames on DSH 0.1.5, retain the legacy feed without duplicate counting, and unwrap persistence snapshot headers for cleanup.
 
-The declared host range is `>=0.1.5-rc.2 <0.1.6-0`; the official `0.1.5-rc.2` runtime was verified. DSH `0.1.6` alpha is not claimed compatible. Keep the previous plugin release on older DSH. [Validation record](.github/reviews/dsh-0.1.5.md).
+The declared host range is `>=0.2.0-rc.2 <0.3.0-0`; official dsh `0.2.0-rc.2` satisfies it. Keep the previous plugin release on older DSH. [Validation record](.github/reviews/dsh-0.1.5.md).
 
-Download the archive from the [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.5.0), then run `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.5.0.tgz`.
+Download the archive from the [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.6.0), then run `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.6.0.tgz`.
 
-This release targets DSH `0.1.5-rc.2`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
+This release targets DSH `0.2.0-rc.2`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
 
 
 The launcher takes a `sidebar.footer.action` seat (a list slot, so it sits beside any other footer action rather than displacing one) and the console renders on the frame-wide `shell.overlay` layer. Neither is per-session, so it conflicts with no session plugin. Requires a DSH whose sidebar declares that seat; without it the console has no way in. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-no-workspace](https://github.com/SpookySandwich/dsh-plugin-no-workspace) and [dsh-plugin-message-edit](https://github.com/SpookySandwich/dsh-plugin-message-edit).
