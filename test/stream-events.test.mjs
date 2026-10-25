@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { apply } from '../lib/index.js';
+import { assertV4RowAdmission } from '@deepseek-ai/dsh-session-format-v3-to-v4';
 
-test('DSH 0.1.5 transient chunks classify and pause without double-counting the legacy feed', async t => {
+test('format v4 probes classify transient chunks without double-counting the legacy feed', async t => {
   const folder = await mkdtemp(join(tmpdir(), 'scout-stream-events-'));
   const workspace = { id: 'qa', path: folder, sessionIds: [], attachSession: async () => {} };
   let route, launches = 0;
@@ -24,16 +25,20 @@ test('DSH 0.1.5 transient chunks classify and pause without double-counting the 
       options.setup({ on(name, fn) { listeners.set(name, fn); return () => {}; } });
       return { dispose: async () => {}, agent: {
         session: { id: options.sessionId }, cancel() {}, whenIdle: async () => {},
-        followup() { queueMicrotask(() => {
-          const stream = listeners.get('agent/assistant-stream');
-          assert.equal(typeof stream, 'function', 'Listen to live Agent frames before sending the probe');
-          stream({ frame: { type: 'start' } });
-          const chunk = { type: 'reasoning-delta', text };
-          stream({ frame: { type: 'chunk', chunk } });
-          listeners.get('session/event')(null, { type: 'assistant/chunk', data: { chunk } });
-          stream({ frame: { type: 'end' } });
-          listeners.get('session/event')(null, { type: 'turn/end', data: { reason: { kind: 'completed' } } });
-        }); },
+        followup(message) {
+          assert.equal(message.source.kind, 'dsh-plugin-rollout-scout');
+          assertV4RowAdmission({ type: 'user/message', data: message });
+          queueMicrotask(() => {
+            const stream = listeners.get('agent/assistant-stream');
+            assert.equal(typeof stream, 'function', 'Listen to live Agent frames before sending the probe');
+            stream({ frame: { type: 'start' } });
+            const chunk = { type: 'reasoning-delta', text };
+            stream({ frame: { type: 'chunk', chunk } });
+            listeners.get('session/event')(null, { type: 'assistant/chunk', data: { chunk } });
+            stream({ frame: { type: 'end' } });
+            listeners.get('session/event')(null, { type: 'turn/end', data: { reason: { kind: 'completed' } } });
+          });
+        },
       } };
     } },
   };
