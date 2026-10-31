@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-rollout-scout",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Detect which conversation model your DeepSeek Harness account is served: score probe conversations' live chain-of-thought, cancel old-model probes in seconds, keep confident catches.",
   "type": "module",
   "main": "lib/index.js",
@@ -42,6 +42,7 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-workspace",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-layout",
@@ -54,7 +55,7 @@
     "prepare": "node _wrap-client.mjs",
     "prepack": "node _wrap-client.mjs",
     "pretest": "node _wrap-client.mjs",
-    "test": "node test/classifier.test.mjs && node test/route.test.mjs && node test/pump.test.mjs && node test/delete.test.mjs && node test/lifecycle.test.mjs && node test/ownership.test.mjs && node test/manifest.test.mjs && node test/manifest-concurrency.test.mjs && node test/manifest-process.test.mjs && node test/history.test.mjs && node test/state-machine.test.mjs && node test/client-review.test.mjs && node test/client-anchor.test.mjs && node test/client-css.test.mjs && node --test test/client-loading.test.mjs && node --test test/probe-errors.test.mjs && node --test test/stream-events.test.mjs",
+    "test": "node test/classifier.test.mjs && node test/route.test.mjs && node test/pump.test.mjs && node test/delete.test.mjs && node test/lifecycle.test.mjs && node test/ownership.test.mjs && node test/manifest.test.mjs && node test/manifest-concurrency.test.mjs && node test/manifest-process.test.mjs && node test/history.test.mjs && node test/state-machine.test.mjs && node test/client-review.test.mjs && node test/client-anchor.test.mjs && node test/client-css.test.mjs && node --test test/client-loading.test.mjs && node --test test/probe-errors.test.mjs && node --test test/reasoning.test.mjs test/stream-events.test.mjs",
     "check:client": "node _wrap-client.mjs && git diff --exit-code -- lib/client.js",
     "check:package": "node scripts/check-package.mjs"
   },
@@ -65,9 +66,9 @@
     "react-dom": "^18.3.1"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2"
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5"
   },
   "engines": {
-    "dsh": ">=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2"
+    "dsh": ">=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5"
   }
 }

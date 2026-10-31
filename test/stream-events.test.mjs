@@ -7,7 +7,7 @@ import { Readable } from 'node:stream';
 import { apply } from '../lib/index.js';
 import { assertV4RowAdmission } from '@deepseek-ai/dsh-session-format-v3-to-v4';
 
-test('format v4 probes classify transient chunks without double-counting the legacy feed', async t => {
+async function streamProbe(t, signature) {
   const folder = await mkdtemp(join(tmpdir(), 'scout-stream-events-'));
   const workspace = { id: 'qa', path: folder, sessionIds: [], attachSession: async () => {} };
   let route, launches = 0;
@@ -32,9 +32,20 @@ test('format v4 probes classify transient chunks without double-counting the leg
             const stream = listeners.get('agent/assistant-stream');
             assert.equal(typeof stream, 'function', 'Listen to live Agent frames before sending the probe');
             stream({ frame: { type: 'start' } });
-            const chunk = { type: 'reasoning-delta', text };
-            stream({ frame: { type: 'chunk', chunk } });
-            listeners.get('session/event')(null, { type: 'assistant/chunk', data: { chunk } });
+            const realNow = Date.now;
+            const start = realNow();
+            try {
+              let now = start;
+              Date.now = () => now;
+              for (const part of [...signature, text]) {
+                if (part === text) now = start + 3000;
+                const chunk = { type: 'reasoning-delta', text: part };
+                stream({ frame: { type: 'chunk', chunk } });
+                listeners.get('session/event')(null, { type: 'assistant/chunk', data: { chunk } });
+              }
+            } finally {
+              Date.now = realNow;
+            }
             stream({ frame: { type: 'end' } });
             listeners.get('session/event')(null, { type: 'turn/end', data: { reason: { kind: 'completed' } } });
           });
@@ -68,5 +79,13 @@ test('format v4 probes classify transient chunks without double-counting the leg
   assert.equal(launches, 1);
   assert.equal(state.attempts[0].verdict, 'rollout');
   assert.equal(state.attempts[0].chars, text.length);
+  assert.equal(state.attempts[0].preview, text);
+  assert.equal(state.attempts[0].ttft, 3, 'Metadata must not start the prose latency clock');
+  assert.equal(state.attempts[0].tps, null, 'Metadata fragments must not inflate prose throughput');
   assert.equal(state.attempts[0].protected, true);
-});
+}
+
+for (const signature of ['', '<signature>Let me ignore this opaque metadata.</signature>\r\n\n']) {
+  test(`format v4 probes classify transient chunks without double-counting the legacy feed (${signature ? 'signed' : 'plain'})`,
+    t => streamProbe(t, signature));
+}

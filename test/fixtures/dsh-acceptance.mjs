@@ -11,6 +11,7 @@ const require = createRequire(join(process.env.DSH_QA_MODULES, 'package.json'));
 const { LlmAdapter } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-llm')));
 const calls = [];
 const reasoning = "I'll validate this offline probe with a deterministic local reply.";
+const signature = '<signature>Let me keep this opaque metadata out of classification.</signature>\r\n\n';
 
 class LocalReply extends LlmAdapter {
   async resolveModel(provider, model) {
@@ -24,6 +25,9 @@ class LocalReply extends LlmAdapter {
     const prompt = message.content.find(block => block.type === 'text')?.text;
     calls.push({ prompt, reasoningEffort: options.reasoningEffort, source: message.source });
     if (prompt === 'qa-error') throw new Error('Offline QA model failure');
+    if (prompt === 'qa-signed') {
+      for (const text of signature) yield { type: 'reasoning-delta', index: 0, text };
+    }
     yield { type: 'reasoning-delta', index: 0, text: reasoning };
     yield { type: 'text-delta', index: 1, text: 'Offline Scout acceptance reply.' };
     yield { type: 'finish', reason: { kind: 'stop' } };
@@ -47,7 +51,7 @@ export function apply(ctx) {
         } finally { observation[Symbol.dispose](); }
       }
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ sessions, calls, reasoning }));
+      res.end(JSON.stringify({ sessions, calls, reasoning, signature }));
     } catch (error) {
       res.writeHead(500, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: String(error), stack: error.stack }));

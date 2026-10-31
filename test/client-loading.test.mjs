@@ -17,6 +17,7 @@ const expectedSlots = {
 const requiredModules = {
   slots: '@deepseek-ai/dsh-client-ui-renderer',
   sessions: '@deepseek-ai/dsh-api-session-controller',
+  uiWorkspace: '@deepseek-ai/dsh-client-ui-workspace',
   workspaces: '@deepseek-ai/dsh-api-workspace-controller',
   locale: '@deepseek-ai/dsh-client-locale',
   modules: '@deepseek-ai/dsh-client-modules',
@@ -47,7 +48,8 @@ test('client waits for its declared DSH services and registers after they become
     register: () => () => {}, entries: () => [], subscribe: () => () => {},
   };
   const services = {
-    slots, sessions: { open() {}, list: { subscribe: () => () => {}, getSnapshot: () => ({ ids: [], byId: {} }) } },
+    slots, sessions: { list: { subscribe: () => () => {}, getSnapshot: () => ({ ids: [], byId: {} }) } },
+    uiWorkspace: { openSession() {} },
     workspaces: { list: { subscribe: () => () => {}, getSnapshot: () => ({ items: [] }) } },
     locale: {}, modules: {}, timer: {},
   };

@@ -12,7 +12,7 @@ const root = resolve(import.meta.dirname, '..');
 assert.ok(process.env.DSH_QA_MODULES, 'Set DSH_QA_MODULES to official DSH node_modules');
 const modules = resolve(process.env.DSH_QA_MODULES);
 const runtime = JSON.parse(await readFile(join(modules, '@deepseek-ai/dsh/package.json'), 'utf8'));
-const sandbox = await mkdtemp(join(tmpdir(), 'rollout-scout-dsh-qa-'));
+const sandbox = await mkdtemp(join(process.env.DSH_QA_SANDBOX_ROOT || tmpdir(), 'rollout-scout-dsh-qa-'));
 const home = join(sandbox, 'dsh');
 const profile = join(home, 'profiles', 'web');
 const folder = join(sandbox, 'probes');
@@ -27,6 +27,7 @@ async function stop() {
   const exited = once(child, 'exit');
   child.kill();
   await exited;
+  console.log(`Stopped owned DSH PID ${child.pid}`);
 }
 async function request(path, body) {
   const response = await fetch(origin + path, { signal: AbortSignal.timeout(15000),
@@ -47,8 +48,8 @@ async function settled(predicate) {
   } while (Date.now() < deadline);
   throw new Error(`Scout did not settle: ${JSON.stringify(state)}`);
 }
-async function keepProbe() {
-  await scout({ action: 'start', config });
+async function keepProbe(prompt = 'qa-keep') {
+  await scout({ action: 'start', config: { ...config, prompt } });
   const state = await settled(state => state.protectedCount > 0);
   assert.equal(state.note, 'hit');
   assert.equal(state.launched, 1);
@@ -57,12 +58,18 @@ async function keepProbe() {
   assert.equal(attempt.protected, true);
   const qa = await request('/qa/state');
   assert.equal(attempt.chars, qa.reasoning.length, 'Live reasoning must not be missed or duplicated');
+  assert.equal(attempt.preview, qa.reasoning, 'Only reasoning prose belongs in the Scout preview');
   assert.equal(qa.calls.at(-1).reasoningEffort, 'max');
   assert.equal(qa.calls.at(-1).source.kind, 'dsh-plugin-rollout-scout');
   const session = qa.sessions.find(session => session.header.id === attempt.sessionId);
   assert.ok(session?.onDisk, 'Real JSONL persistence must contain the retained probe');
   assert.equal(session.live, false, 'Completed Scout agents release their live sessions');
   assert.ok(session.events.some(event => event.type === 'assistant/message'));
+  if (prompt === 'qa-signed') {
+    assert.ok(session.events.some(event => event.type === 'assistant/message'
+      && JSON.stringify(event.data).includes('<signature>')),
+    'Host persistence must retain the original signed model output');
+  }
   return attempt;
 }
 try {
@@ -100,7 +107,7 @@ try {
       if (server.exitCode !== null || Date.now() > deadline) throw new Error(`DSH ${phase} startup failed`);
       await delay(100);
     }
-    console.log(`Official DSH ${runtime.version}: ${phase}`);
+    console.log(`Official DSH ${runtime.version}: ${phase}; PID ${server.pid}; ${origin}; sandbox ${sandbox}`);
     if (phase === 'fresh') {
       const attempt = await keepProbe();
       await scout({ action: 'rename', id: attempt.id, title: 'QA retained catch' });
@@ -116,8 +123,8 @@ try {
       await scout({ action: 'clear' });
       qa = await request('/qa/state');
       assert.ok(!qa.sessions.some(session => session.header.id === attempt.sessionId), 'Explicit cleanup removes the log');
-      retainedId = (await keepProbe()).sessionId;
-      console.log('PASS: streaming, max effort, auto-pause, cold rename, protected cleanup, explicit deletion');
+      retainedId = (await keepProbe('qa-signed')).sessionId;
+      console.log('PASS: plain/signed streaming, prose-only preview, raw persistence, max effort, auto-pause, cold rename, protected cleanup, explicit deletion');
     } else {
       let qa = await request('/qa/state');
       assert.ok(qa.sessions.some(session => session.header.id === retainedId && session.onDisk));
@@ -156,4 +163,5 @@ try {
 } finally {
   await stop();
   await rm(sandbox, { recursive: true, force: true });
+  console.log(`Removed owned sandbox ${sandbox}`);
 }
