@@ -4,12 +4,15 @@ import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 
 assert.ok(process.env.DSH_QA_MODULES);
 assert.match(process.env.DSH_HOME ?? '', /rollout-scout-dsh-qa-/);
 const require = createRequire(join(process.env.DSH_QA_MODULES, 'package.json'));
 const { LlmAdapter } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-llm')));
+const { installModelSelection } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-agent')));
 const calls = [];
+const cancelled = [];
 const reasoning = "I'll validate this offline probe with a deterministic local reply.";
 const signature = '<signature>Let me keep this opaque metadata out of classification.</signature>\r\n\n';
 
@@ -25,6 +28,15 @@ class LocalReply extends LlmAdapter {
     const prompt = message.content.find(block => block.type === 'text')?.text;
     calls.push({ prompt, reasoningEffort: options.reasoningEffort, source: message.source });
     if (prompt === 'qa-error') throw new Error('Offline QA model failure');
+    if (prompt === 'qa-old') {
+      yield { type: 'reasoning-delta', index: 0, text: 'Let me inspect this deterministic old-model probe before continuing.' };
+      try {
+        await delay(30000, undefined, { signal: options.signal });
+        throw new Error('Old probe was not cancelled');
+      } finally {
+        if (options.signal?.aborted) cancelled.push(prompt);
+      }
+    }
     if (prompt === 'qa-signed') {
       for (const text of signature) yield { type: 'reasoning-delta', index: 0, text };
     }
@@ -37,6 +49,43 @@ class LocalReply extends LlmAdapter {
 export const inject = ['llm', 'sessions', 'agents', 'sessionQuery', 'sessionPersistence', 'webServer'];
 export function apply(ctx) {
   ctx.llm.registerAdapter(['qa-local'], new LocalReply());
+  // Deterministic reproduction of the non-transactional list/observe boundary.
+  // Separate from /qa/state: ordinary acceptance still propagates every error.
+  let listedForRace;
+  ctx.webServer.register({ kind: 'exact', path: '/qa/list-race', handler: async (req, res) => {
+    if (req.method === 'POST') {
+      listedForRace = await ctx.sessionPersistence.list();
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ids: listedForRace.map(record => (record.header ?? record).id) }));
+      return;
+    }
+    assert.ok(listedForRace);
+    const failures = [];
+    for (const record of listedForRace) {
+      const id = (record.header ?? record).id;
+      try {
+        const observation = await ctx.sessionQuery.observeSession(id, { projectionMode: 'none' });
+        observation[Symbol.dispose]();
+      } catch (error) { failures.push({ id, name: error.name, message: error.message }); }
+    }
+    listedForRace = undefined;
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ failures }));
+  } });
+  ctx.webServer.register({ kind: 'exact', path: '/qa/unowned', handler: async (req, res) => {
+    assert.equal(req.method, 'POST');
+    const selection = { provider: 'qa-local', model: 'qa-model', reasoningEffort: 'max' };
+    const handle = await ctx.agents.create({ sessionId: `session-${crypto.randomUUID()}`,
+      meta: { cwd: process.env.DSH_QA_FOLDER }, agentOptions: selection,
+      setup(agentCtx) { installModelSelection(agentCtx, { current: selection, assembled: undefined }); } });
+    try {
+      handle.agent.followup({ id: crypto.randomUUID(), role: 'user',
+        content: [{ type: 'text', text: 'qa-unowned' }], source: { kind: 'dsh-plugin-rollout-scout' } });
+      await handle.agent.whenIdle();
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ sessionId: handle.agent.session.id }));
+    } finally { await handle.dispose(); }
+  } });
   ctx.webServer.register({ kind: 'exact', path: '/qa/state', handler: async (_req, res) => {
     try {
       const sessions = [];
@@ -51,7 +100,7 @@ export function apply(ctx) {
         } finally { observation[Symbol.dispose](); }
       }
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ sessions, calls, reasoning, signature }));
+      res.end(JSON.stringify({ sessions, calls, cancelled, reasoning, signature }));
     } catch (error) {
       res.writeHead(500, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: String(error), stack: error.stack }));

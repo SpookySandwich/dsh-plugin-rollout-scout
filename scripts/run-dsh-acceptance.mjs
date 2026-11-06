@@ -7,6 +7,7 @@ import { mkdtemp, mkdir, symlink, writeFile, copyFile, cp, rm, readFile } from '
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { pathToFileURL } from 'node:url';
 
 const root = resolve(import.meta.dirname, '..');
 assert.ok(process.env.DSH_QA_MODULES, 'Set DSH_QA_MODULES to official DSH node_modules');
@@ -32,7 +33,9 @@ async function stop() {
 async function request(path, body) {
   const response = await fetch(origin + path, { signal: AbortSignal.timeout(15000),
     ...(body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}) });
-  const value = await response.json();
+  const text = await response.text();
+  assert.ok(text, `${path}: HTTP ${response.status} returned an empty body`);
+  const value = JSON.parse(text);
   assert.equal(response.status, 200, JSON.stringify(value));
   return value;
 }
@@ -87,13 +90,13 @@ try {
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-plugin-rollout-scout'] } } }));
   await copyFile(join(root, 'test/fixtures/dsh-acceptance.mjs'), join(profile, 'fixture.mjs'));
   await writeFile(join(profile, 'cordis.patch.yml'), '- insert:\n    - id: offline-qa\n      name: ./fixture.mjs\n');
-  let retainedId;
+  let retainedId, unownedId;
   for (const phase of ['fresh', 'restart']) {
     output = '';
     origin = undefined;
     server = spawn(process.execPath, ['--expose-internals', join(modules, '@deepseek-ai/dsh/lib/bin.js'),
       '--profile', 'web', '--no-open', '--port', '0'], {
-      env: { ...process.env, DSH_HOME: home, DSH_QA_MODULES: modules,
+      env: { ...process.env, DSH_HOME: home, DSH_QA_MODULES: modules, DSH_QA_FOLDER: folder,
         USERPROFILE: join(sandbox, 'user'), HOME: join(sandbox, 'user') },
       stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
     });
@@ -119,12 +122,50 @@ try {
       qa = await request('/qa/state');
       assert.ok(qa.sessions.some(session => session.header.id === attempt.sessionId && session.onDisk),
         'Protected probes survive both cleanup actions');
+      const listed = await request('/qa/list-race', {});
+      assert.ok(listed.ids.includes(attempt.sessionId));
       await scout({ action: 'unprotect', id: attempt.id });
       await scout({ action: 'clear' });
+      const stale = await request('/qa/list-race');
+      assert.deepEqual(stale.failures, [{ id: attempt.sessionId, name: 'SessionQueryError',
+        message: `session "${attempt.sessionId}" not found` }], 'Only the explicitly deleted owned ID may disappear between list and observation');
+      console.log(`PASS: deterministic stale-list reproduction; deleted owned=${attempt.sessionId}; observe=SessionQueryError not found`);
       qa = await request('/qa/state');
       assert.ok(!qa.sessions.some(session => session.header.id === attempt.sessionId), 'Explicit cleanup removes the log');
+      unownedId = (await request('/qa/unowned', {})).sessionId;
+      qa = await request('/qa/state');
+      assert.ok(qa.sessions.some(session => session.header.id === unownedId && session.onDisk), 'Unowned same-folder fixture is persisted');
       retainedId = (await keepProbe('qa-signed')).sessionId;
+      console.log(`QA ledger: retained=${retainedId}; unowned=${unownedId}`);
       console.log('PASS: plain/signed streaming, prose-only preview, raw persistence, max effort, auto-pause, cold rename, protected cleanup, explicit deletion');
+      if (process.env.DSH_QA_BROWSER_MODULE) {
+        const { checkBrowser } = await import(pathToFileURL(resolve(process.env.DSH_QA_BROWSER_MODULE)));
+        await checkBrowser({ origin, entryUrl: output.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=[^\s]+)/)?.[1] || origin,
+          sandbox, runtime: runtime.version, retainedId });
+      }
+      await scout({ action: 'force-stop' });
+      await scout({ action: 'start', config: { ...config, prompt: 'qa-old' } });
+      const deadline = Date.now() + 15000;
+      let old;
+      do {
+        old = (await scout()).attempts.find(attempt => attempt.verdict === 'old');
+        if (old) break;
+        await delay(25);
+      } while (Date.now() < deadline);
+      assert.ok(old, 'Live negative reasoning must be classified before the model ends');
+      console.log(`QA ledger: discarded=${old.sessionId}; attempt=${old.id}`);
+      await scout({ action: 'pause' });
+      // Agent teardown releases active/blocking before asynchronous auto-delete
+      // finishes. Do not enumerate persistence across that known mutation.
+      await settled(state => state.attempts.some(attempt => attempt.id === old.id && attempt.deleted));
+      qa = await request('/qa/state');
+      assert.deepEqual(qa.cancelled, ['qa-old'], 'Host cancellation must reach the local model AbortSignal');
+      await scout({ action: 'delete-all' });
+      qa = await request('/qa/state');
+      assert.ok(!qa.sessions.some(session => session.header.id === old.sessionId), 'Cancelled owned probe is removed');
+      assert.ok(qa.sessions.some(session => session.header.id === retainedId && session.onDisk), 'Negative cleanup preserves the retained catch');
+      assert.ok(qa.sessions.some(session => session.header.id === unownedId && session.onDisk), 'Cleanup never infers ownership from folder or message source');
+      console.log('PASS: live negative classification, model cancellation, owned cleanup, retained catch preservation');
     } else {
       let qa = await request('/qa/state');
       assert.ok(qa.sessions.some(session => session.header.id === retainedId && session.onDisk));
@@ -147,6 +188,8 @@ try {
       qa = await request('/qa/state');
       assert.ok(qa.sessions.some(session => session.header.id === retainedId && session.onDisk),
         'Restart orphan cleanup must preserve durable Keep');
+      assert.ok(qa.sessions.some(session => session.header.id === unownedId && session.onDisk),
+        'Restart orphan cleanup must preserve the unowned same-folder conversation');
       for (const attempt of state.attempts) {
         assert.ok(!qa.sessions.some(session => session.header.id === attempt.sessionId));
       }
