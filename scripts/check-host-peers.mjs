@@ -17,7 +17,7 @@ function npm(args, cwd) {
 }
 try {
   const [pack] = JSON.parse(npm(['pack', '--json', '--silent', '--pack-destination', sandbox], root));
-  for (const version of ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-rc.1']) {
+  for (const version of ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.3']) {
     const target = join(sandbox, version);
     mkdirSync(target);
     npm(['install', '--package-lock-only', '--strict-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund',

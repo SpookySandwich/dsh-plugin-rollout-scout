@@ -5,7 +5,7 @@ English | [简体中文](README.md)
 [![npm](https://img.shields.io/npm/v/dsh-plugin-rollout-scout?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-plugin-rollout-scout)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.1-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.3-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
 Providers sometimes roll a new conversation model out gradually, so which one you get is luck of the draw. Rollout Scout opens throwaway conversations on your own account, reads each one's chain-of-thought **as it streams**, and scores how the reasoning is written — cancelling the ones that read like the model you already have, and keeping the ones that don't.
@@ -135,6 +135,8 @@ Implementation notes live in [`docs/`](docs/) — [architecture](docs/architectu
 
 ## Compatibility
 
+Version `1.9.1`: Support official dsh `0.2.2-rc.3` (while retaining `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, and `0.2.2-rc.1` compatibility). Imported conversations created via `@deepseek-ai/dsh-deepseek-chat-import` in a Scout workspace remain untouched by probe ownership and cleanup.
+
 Version `1.9.0`: Support official dsh `0.2.2-rc.1` (while retaining `0.2.0-rc.2`, `0.2.1-rc.2`, and `0.2.1-rc.5` compatibility). Replace undefined `--dsw-alias-bg-primary` with official `--dsw-alias-bg-layer-1` across supported theme packages, fixing dark background artifacts on light theme console and preflight dialogs. Decouple semantic text ink from decorative tints: introduce high-contrast green/brown ink in light mode and pale green/amber ink under `body[data-ds-dark-theme]` for badge, Keep, evidence chip, self-check, warning, and score text over tinted surfaces, and decouple the Mute button to distinct blue fill and white text to resolve unreadable `currentColor` styling (note: scope covers measured readable green/amber status, self-check, and Mute, not a blanket claim for all text or full WCAG; pre-existing red/danger states remain ~2.87-3.91 light / ~2.92-4.05 dark; native tertiary light text is also < 4.5:1). Official DSH 0.2.2-rc.1 declares Node `>=24.9.0` (latest-host QA on Node 24.13), while older official hosts continue running on Node 22 (Node 22.19) without imposing a global Node floor on older setups. Fix QA fixture synchronization by awaiting actual `deleteOwnedSession` and manifest completion before listing sessions, while preserving normal `/qa/state` propagation of all missing-session errors.
 
 Version `1.8.0`: Support official dsh `0.2.1-rc.5` (while retaining `0.2.0-rc.2` and `0.2.1-rc.2` compatibility). Treat leading reasoning signature envelope as metadata to prevent premature discards, preview pollution, and timing drift while preserving raw JSONL stream persistence. Use official `uiWorkspace.openSession` navigation, resolving client session opening across supported official runtimes.
@@ -145,11 +147,11 @@ Version `1.6.0`: Load on official dsh `0.2.0-rc.2`. Probe cleanup still uses `se
 
 Version `1.5.0`: Consume transient agent/assistant-stream frames on DSH 0.1.5, retain the legacy feed without duplicate counting, and unwrap persistence snapshot headers for cleanup.
 
-The declared host range is `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1`; official dsh `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, and `0.2.2-rc.1` satisfy it. Keep the previous plugin release on older DSH. [Validation records](.github/reviews/dsh-0.2.2-rc.1.md) and [round 2](.github/reviews/dsh-0.2.2-rc.1-round2.md).
+The declared host range is `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3`; official dsh `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, `0.2.2-rc.1`, and `0.2.2-rc.3` satisfy it. Keep the previous plugin release on older DSH. [Validation records](.github/reviews/dsh-0.2.2-rc.1.md) and [round 2](.github/reviews/dsh-0.2.2-rc.1-round2.md).
 
-Download the archive from the [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.9.0), then run `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.9.0.tgz`.
+Download the archive from the [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.9.1), then run `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.9.1.tgz`.
 
-This release targets DSH `0.2.2-rc.1`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
+This release targets DSH `0.2.2-rc.3`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
 
 
 The launcher takes a `sidebar.footer.action` seat (a list slot, so it sits beside any other footer action rather than displacing one) and the console renders on the frame-wide `shell.overlay` layer. Neither is per-session, so it conflicts with no session plugin. Requires a DSH whose sidebar declares that seat; without it the console has no way in. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-no-workspace](https://github.com/SpookySandwich/dsh-plugin-no-workspace) and [dsh-plugin-message-edit](https://github.com/SpookySandwich/dsh-plugin-message-edit).
