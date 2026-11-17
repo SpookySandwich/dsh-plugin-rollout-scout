@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/dsh-plugin-rollout-scout?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-plugin-rollout-scout)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.3-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.4-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
 服务商有时会灰度发布新的对话模型，你分到哪一个全看运气。灰度侦察会用你自己的账号开启一批临时会话，**在思维链流式输出的同时**读取它，并按「推理是怎么写的」打分——读起来像你手上这个旧模型的立刻中止，不像的留下来。
@@ -133,6 +133,8 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 
 ## 兼容性
 
+下一版本：支持官方 dsh `0.2.2-rc.4`，使普通 npm 安装及严格 peer 依赖检查接受该版本，同时保留此前声明的全部兼容性。拒答（包括部分思维链输出后的 `CONTENT_REFUSED`）沿用现有错误处理，无需更改插件设置。
+
 版本 `1.9.1`：支持官方 dsh `0.2.2-rc.3`（同时保留 `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.1-rc.5` 与 `0.2.2-rc.1` 兼容）。通过 `@deepseek-ai/dsh-deepseek-chat-import` 导入到侦察目录中的会话不会进入探测所有权记录或清理范围。
 
 版本 `1.9.0`：支持官方 dsh `0.2.2-rc.1`（同时保留 `0.2.0-rc.2`、`0.2.1-rc.2` 与 `0.2.1-rc.5` 兼容）。将未定义的 `--dsw-alias-bg-primary` 修正为全官方主题一致定义的 `--dsw-alias-bg-layer-1`，修复浅色主题控制台及预检弹窗背景发黑缺陷；将语义墨水与装饰底色解耦，为徽章、Keep 状态、证据标签、自检、警告及分数文本在浅色/深色（`body[data-ds-dark-theme]`）下设定高对比度墨水色，并将静音按钮解耦为独立蓝色底色与白色文字，解决原 `currentColor` 导致文字不可读问题（注：范围限于已实测的高对比度绿/琥珀色状态、自检与静音按钮，非全量文本或全部 WCAG 声明；历史负向红色状态仍保留约 2.87-3.91 浅色 / 2.92-4.05 深色非阻塞可读范围；宿主浅色三级文本亦低于 4.5:1）；官方 dsh `0.2.2-rc.1` 声明 Node `>=24.9.0`（最新宿主 QA 基于 Node 24.13），旧版官方宿主仍继续运行于 Node 22（Node 22.19），不强加全局 Node 最低版本。修复验收测试中负向探测删除与清单枚举的并发竞争，确保正常 `/qa/state` 路由继续抛出所有真实缺失会话错误。
@@ -145,11 +147,11 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 
 版本 `1.5.0`：适配 DSH 0.1.5 的 agent/assistant-stream 瞬态流式事件，保留旧事件支持并防止重复计数，兼容持久化列表的新快照结构。
 
-声明兼容范围为 `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3`；官方 dsh `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.1-rc.5`、`0.2.2-rc.1` 与 `0.2.2-rc.3` 均满足该范围。旧版 DSH 请保留上一插件版本。[验证记录](.github/reviews/dsh-0.2.2-rc.1.md)及[第二轮记录](.github/reviews/dsh-0.2.2-rc.1-round2.md)。
+声明兼容范围为 `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4`；官方 dsh `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.1-rc.5`、`0.2.2-rc.1`、`0.2.2-rc.3` 与 `0.2.2-rc.4` 均满足该范围。旧版 DSH 请保留上一插件版本。[验证记录](.github/reviews/dsh-0.2.2-rc.1.md)及[第二轮记录](.github/reviews/dsh-0.2.2-rc.1-round2.md)。
 
-可从 [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.9.1) 下载发布包，然后执行 `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.9.1.tgz`。
+可从 [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.9.1) 下载发布包，然后执行 `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.9.1.tgz`。rc.4 兼容更新将在插件下一版本发布；在此之前，rc.4 用户请按上文从仓库安装。
 
-本次兼容目标为 DSH `0.2.2-rc.3`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
+本次兼容目标为 DSH `0.2.2-rc.4`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
 
 
 入口占用 `sidebar.footer.action` 座位（list 类型，会与其它底部操作并排，而不是把谁挤掉），控制台本体渲染在全局 `shell.overlay` 层。两者都不属于会话作用域，因此不与任何会话内插件冲突。需要侧边栏声明了该座位的 DSH 版本；否则控制台将没有入口。与 [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream)、[dsh-plugin-no-workspace](https://github.com/SpookySandwich/dsh-plugin-no-workspace)、[dsh-plugin-message-edit](https://github.com/SpookySandwich/dsh-plugin-message-edit) 同族。
