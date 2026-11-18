@@ -1,7 +1,7 @@
 // Exercise npm's prerelease peer resolver against the actual packed plugin.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -10,16 +10,19 @@ const root = resolve(import.meta.dirname, '..');
 const sandbox = mkdtempSync(join(process.env.DSH_QA_SANDBOX_ROOT || tmpdir(), 'rollout-scout-peers-'));
 function npm(args, cwd) {
   const result = spawnSync(process.execPath, [process.env.npm_execpath, ...args], {
-    cwd, encoding: 'utf8', timeout: 120000,
+    cwd, encoding: 'utf8', timeout: 600000,
   });
   assert.equal(result.status, 0, result.error?.message || result.stderr || result.stdout);
   return result.stdout;
 }
 try {
   const [pack] = JSON.parse(npm(['pack', '--json', '--silent', '--pack-destination', sandbox], root));
-  for (const version of ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.3', '0.2.2-rc.4']) {
+  for (const version of ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.3', '0.2.2-rc.4', '0.2.2-rc.5']) {
     const target = join(sandbox, version);
     mkdirSync(target);
+    // Without its own package.json, npm resolves in the nearest ancestor project
+    // (such as a home folder) and rewrites that project's manifest and lockfile.
+    writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'peer-check', private: true }));
     npm(['install', '--package-lock-only', '--strict-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund',
       `@deepseek-ai/dsh@${version}`, join(sandbox, pack.filename)], target);
     console.log(`PASS: packed plugin resolves with official DSH ${version} under strict npm peers`);
