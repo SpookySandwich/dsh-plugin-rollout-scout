@@ -17,7 +17,7 @@ function npm(args, cwd) {
 }
 try {
   const [pack] = JSON.parse(npm(['pack', '--json', '--silent', '--pack-destination', sandbox], root));
-  for (const version of ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.3', '0.2.2-rc.4', '0.2.2-rc.5', '0.2.3-alpha.1']) {
+  for (const version of ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.3', '0.2.2-rc.4', '0.2.2-rc.5', '0.2.3-alpha.1', '0.2.3-alpha.2']) {
     const target = join(sandbox, version);
     mkdirSync(target);
     // Without its own package.json, npm resolves in the nearest ancestor project

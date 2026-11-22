@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/dsh-plugin-rollout-scout?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-plugin-rollout-scout)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.2.3--alpha.1-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.2.3--alpha.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
 服务商有时会灰度发布新的对话模型，你分到哪一个全看运气。灰度侦察会用你自己的账号开启一批临时会话，**在思维链流式输出的同时**读取它，并按「推理是怎么写的」打分——读起来像你手上这个旧模型的立刻中止，不像的留下来。
@@ -110,15 +110,15 @@ dsh plugin --profile web add dsh-plugin-rollout-scout
 
 安装后请重启 DSH：宿主端随服务器加载。界面跟随 DSH 显示语言（中文 / English）。
 
-也可以直接从仓库安装，跟的是 `master` 而不是最近一次发布：
+也可以下载 Scout 1.9.3 的发布包 `dsh-plugin-rollout-scout-1.9.3.tgz`，然后在下载目录中运行以下命令。[GitHub 发布页](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.9.3)
 
 ```bash
-dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
+dsh plugin --profile web add ./dsh-plugin-rollout-scout-1.9.3.tgz
 ```
 
 `web` 是 profile 名称，请换成你实际使用的那个。独立版启动的是 `web`，DSH Desktop 用的是 `desktop`。`~/.dsh/profiles/` 下就是你现有的 profile，安装结果落在对应 profile 的 `package.json` 里。
 
-`lib/client.js` 是构建产物，但已**提交进仓库**，所以从仓库安装时也无需任何构建步骤。若你修改了 `plugin.client.js`，请运行 `npm run build` 重新生成（`npm test` 也会顺带生成），并把结果一并提交。
+仓库中包含已生成的客户端文件 `lib/client.js`。若你修改了 `plugin.client.js`，请运行 `npm run build` 重新生成（`npm test` 也会顺带生成），并把结果一并提交。
 
 ## 工作原理
 
@@ -133,7 +133,9 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 
 ## 兼容性
 
-下一版本：支持官方 dsh `0.2.3-alpha.1`，使普通 npm 安装及严格 peer 依赖检查接受该版本，同时保留此前声明的全部兼容性。控制台可在该版本需登录的 Web 与桌面版连接下正常使用，未登录的 `/rollout-scout` 请求会被 DSH 拒绝。启用可选的 SQLite 会话存储时，侦察仍可运行探测，但无法删除探测会话，因此会保留所有探测：控制台会给出说明，删除旧模型会话、清空已结束、删除全部会话和清理均停用，每个探测仍可保留、重命名和打开。默认的 JSONL 存储不受影响。Windows 桌面版中，控制台现在从窗口标题栏下方开始显示，不再被标题栏菜单遮挡。
+Scout 下一版本将支持通过 npm 在 DSH `0.2.3-alpha.2` 上安装。该版 DSH 要求 Node.js `^24.22.3 || >=26.13.1`。
+
+版本 `1.9.3`：支持官方 dsh `0.2.3-alpha.1`，使普通 npm 安装及严格 peer 依赖检查接受该版本，同时保留此前声明的全部兼容性。控制台可在该版本需登录的 Web 与桌面版连接下正常使用，未登录的 `/rollout-scout` 请求会被 DSH 拒绝。启用可选的 SQLite 会话存储时，侦察仍可运行探测，但无法删除探测会话，因此会保留所有探测：控制台会给出说明，删除旧模型会话、清空已结束、删除全部会话和清理均停用，每个探测仍可保留、重命名和打开。默认的 JSONL 存储不受影响。Windows 桌面版中，控制台现在从窗口标题栏下方开始显示，不再被标题栏菜单遮挡。
 
 版本 `1.9.2`：支持官方 dsh `0.2.2-rc.4` 与 `0.2.2-rc.5`，使普通 npm 安装及严格 peer 依赖检查接受这些版本，同时保留此前声明的全部兼容性。拒答（包括部分思维链输出后的 `CONTENT_REFUSED`）沿用现有错误处理，无需更改插件设置。rc.5 调整了默认联网搜索服务，但不影响侦察：探测会话不加入任何 agent preset，没有 `web_search` 工具，也从不搜索。
 
@@ -149,11 +151,11 @@ dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
 
 版本 `1.5.0`：适配 DSH 0.1.5 的 agent/assistant-stream 瞬态流式事件，保留旧事件支持并防止重复计数，兼容持久化列表的新快照结构。
 
-声明兼容范围为 `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4 || 0.2.2-rc.5 || 0.2.3-alpha.1`；官方 dsh `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.1-rc.5`、`0.2.2-rc.1`、`0.2.2-rc.3`、`0.2.2-rc.4`、`0.2.2-rc.5` 与 `0.2.3-alpha.1` 均满足该范围。旧版 DSH 请保留上一插件版本。[验证记录](.github/reviews/dsh-0.2.2-rc.1.md)及[第二轮记录](.github/reviews/dsh-0.2.2-rc.1-round2.md)。
+声明兼容范围为 `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4 || 0.2.2-rc.5 || 0.2.3-alpha.1 || 0.2.3-alpha.2`；官方 dsh `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.1-rc.5`、`0.2.2-rc.1`、`0.2.2-rc.3`、`0.2.2-rc.4`、`0.2.2-rc.5`、`0.2.3-alpha.1` 与 `0.2.3-alpha.2` 均满足该范围。旧版 DSH 请保留上一插件版本。[验证记录](.github/reviews/dsh-0.2.2-rc.1.md)及[第二轮记录](.github/reviews/dsh-0.2.2-rc.1-round2.md)。
 
-可从 [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.9.2) 下载发布包，然后执行 `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.9.2.tgz`。0.2.3-alpha.1 兼容更新将在插件下一版本发布；在此之前，0.2.3-alpha.1 用户请按上文从仓库安装。
+在 DSH `0.2.3-alpha.2` 上，使用 `dsh plugin add` 按包名或从发布包安装 Scout `1.9.3` 后，DSH 均可正常加载插件。如果 pnpm 因最低发布时间限制而选中了旧版，请使用 1.9.3 发布包。DSH 的兼容性预检接受该宿主版本。由于 `1.9.3` 的 peer 依赖范围未明确列出 `0.2.3-alpha.2`，npm 的严格 peer 依赖检查会拒绝这一组合。[安装说明](#安装)
 
-本次兼容目标为 DSH `0.2.3-alpha.1`。运行 `npm ci`、`npm test` 和 `npm run check:package` 可验证构建及发布包。更新后请重启 DSH。
+本次兼容目标为 DSH `0.2.3-alpha.2`。运行 `npm ci`、`npm test`、`npm run check:package` 和 `npm run check:peers` 可验证构建及发布包。更新后请重启 DSH。
 
 
 入口占用 `sidebar.footer.action` 座位（list 类型，会与其它底部操作并排，而不是把谁挤掉），控制台本体渲染在全局 `shell.overlay` 层。两者都不属于会话作用域，因此不与任何会话内插件冲突。需要侧边栏声明了该座位的 DSH 版本；否则控制台将没有入口。与 [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream)、[dsh-plugin-no-workspace](https://github.com/SpookySandwich/dsh-plugin-no-workspace)、[dsh-plugin-message-edit](https://github.com/SpookySandwich/dsh-plugin-message-edit) 同族。

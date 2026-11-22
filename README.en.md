@@ -5,7 +5,7 @@ English | [简体中文](README.md)
 [![npm](https://img.shields.io/npm/v/dsh-plugin-rollout-scout?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-plugin-rollout-scout)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.2.3--alpha.1-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.2.3--alpha.2-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
 Providers sometimes roll a new conversation model out gradually, so which one you get is luck of the draw. Rollout Scout opens throwaway conversations on your own account, reads each one's chain-of-thought **as it streams**, and scores how the reasoning is written — cancelling the ones that read like the model you already have, and keeping the ones that don't.
@@ -112,15 +112,15 @@ dsh plugin --profile web add dsh-plugin-rollout-scout
 
 Restart DSH afterwards: the host half loads with the server. The interface follows DSH's display language (English / 中文).
 
-Installing from the repository also works and tracks `master` rather than the last release:
+To install Scout 1.9.3 from an archive, download `dsh-plugin-rollout-scout-1.9.3.tgz` and run the following command from the download directory. [GitHub release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.9.3)
 
 ```bash
-dsh plugin --profile web add github:SpookySandwich/dsh-plugin-rollout-scout
+dsh plugin --profile web add ./dsh-plugin-rollout-scout-1.9.3.tgz
 ```
 
 `web` is the profile name — use whichever profile you actually run. The standalone harness boots `web`; DSH Desktop uses `desktop`. `~/.dsh/profiles/` lists the ones you have, and the installed bundle ends up in that profile's `package.json`.
 
-`lib/client.js` is a generated bundle but it is **committed**, so a repository install needs no build step. If you edit `plugin.client.js`, run `npm run build` to regenerate it (`npm test` does this too), and commit the result.
+The repository includes the generated `lib/client.js` bundle. If you edit `plugin.client.js`, run `npm run build` to regenerate it (`npm test` does this too), and commit the result.
 
 ## How it works
 
@@ -135,7 +135,9 @@ Implementation notes live in [`docs/`](docs/) — [architecture](docs/architectu
 
 ## Compatibility
 
-Next release: Support official dsh `0.2.3-alpha.1` with ordinary npm peer resolution and strict peer checking, while retaining all previously declared compatibility. The console works over the release's signed-in Web and Desktop connections, and DSH refuses unauthenticated requests to `/rollout-scout`. With the opt-in SQLite session store, Scout still runs probes but cannot delete probe conversations, so it keeps every one: the console says so, deleting old-model probes, Clear finished, Delete all sessions and sweeping are switched off, and each probe can still be kept, renamed and opened. The default JSONL store is unaffected. On Windows Desktop the console now opens below the window's caption row instead of under its menu.
+The next Scout release adds npm peer support for DSH `0.2.3-alpha.2`. This DSH host requires Node.js `^24.22.3 || >=26.13.1`.
+
+Version `1.9.3`: Support official dsh `0.2.3-alpha.1` with ordinary npm peer resolution and strict peer checking, while retaining all previously declared compatibility. The console works over the release's signed-in Web and Desktop connections, and DSH refuses unauthenticated requests to `/rollout-scout`. With the opt-in SQLite session store, Scout still runs probes but cannot delete probe conversations, so it keeps every one: the console says so, deleting old-model probes, Clear finished, Delete all sessions and sweeping are switched off, and each probe can still be kept, renamed and opened. The default JSONL store is unaffected. On Windows Desktop the console now opens below the window's caption row instead of under its menu.
 
 Version `1.9.2`: Support official dsh `0.2.2-rc.4` and `0.2.2-rc.5` with ordinary npm peer resolution and strict peer checking, while retaining all previously declared compatibility. Refusals, including `CONTENT_REFUSED` after partial reasoning, use Scout's existing error handling; no plugin settings changes are needed. The rc.5 change to the default web search provider does not affect Scout: probes join no agent preset, so they have no `web_search` tool and never search.
 
@@ -151,11 +153,11 @@ Version `1.6.0`: Load on official dsh `0.2.0-rc.2`. Probe cleanup still uses `se
 
 Version `1.5.0`: Consume transient agent/assistant-stream frames on DSH 0.1.5, retain the legacy feed without duplicate counting, and unwrap persistence snapshot headers for cleanup.
 
-The declared host range is `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4 || 0.2.2-rc.5 || 0.2.3-alpha.1`; official dsh `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, `0.2.2-rc.1`, `0.2.2-rc.3`, `0.2.2-rc.4`, `0.2.2-rc.5`, and `0.2.3-alpha.1` satisfy it. Keep the previous plugin release on older DSH. [Validation records](.github/reviews/dsh-0.2.2-rc.1.md) and [round 2](.github/reviews/dsh-0.2.2-rc.1-round2.md).
+The declared host range is `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4 || 0.2.2-rc.5 || 0.2.3-alpha.1 || 0.2.3-alpha.2`; official dsh `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, `0.2.2-rc.1`, `0.2.2-rc.3`, `0.2.2-rc.4`, `0.2.2-rc.5`, `0.2.3-alpha.1`, and `0.2.3-alpha.2` satisfy it. Keep the previous plugin release on older DSH. [Validation records](.github/reviews/dsh-0.2.2-rc.1.md) and [round 2](.github/reviews/dsh-0.2.2-rc.1-round2.md).
 
-Download the archive from the [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.9.2), then run `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.9.2.tgz`. The 0.2.3-alpha.1 compatibility update ships in the next plugin release; until then, use the repository installation above on 0.2.3-alpha.1.
+On DSH `0.2.3-alpha.2`, the published Scout `1.9.3` installs and loads through `dsh plugin add` using either the package name or the release archive. If pnpm selects an older release because of its minimum release age, use the 1.9.3 archive. DSH accepts the host version during preflight. npm’s strict peer check rejects this pairing because `1.9.3` omits `0.2.3-alpha.2` from its peer range. [Install](#install)
 
-This update targets DSH `0.2.3-alpha.1`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
+This update targets DSH `0.2.3-alpha.2`. Run `npm ci`, `npm test`, `npm run check:package`, and `npm run check:peers` to verify the build and package. Restart DSH after updating.
 
 
 The launcher takes a `sidebar.footer.action` seat (a list slot, so it sits beside any other footer action rather than displacing one) and the console renders on the frame-wide `shell.overlay` layer. Neither is per-session, so it conflicts with no session plugin. Requires a DSH whose sidebar declares that seat; without it the console has no way in. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-no-workspace](https://github.com/SpookySandwich/dsh-plugin-no-workspace) and [dsh-plugin-message-edit](https://github.com/SpookySandwich/dsh-plugin-message-edit).
