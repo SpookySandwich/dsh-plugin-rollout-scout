@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { existsSync } from 'node:fs';
 import { mkdtemp, mkdir, symlink, writeFile, copyFile, cp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -19,7 +20,7 @@ const profile = join(home, 'profiles', 'web');
 const folder = join(sandbox, 'probes');
 const config = { folder, prompt: 'qa-keep', provider: 'qa-local', model: 'qa-model',
   reasoningEffort: 'max', concurrency: 1, autoPauseOnMatch: true, autoDelete: true };
-let server, origin, output = '';
+let server, origin, cookie, output = '';
 const redact = text => text.replace(/([?&]token=)[^\s]+/g, '$1[redacted]');
 async function stop() {
   const child = server;
@@ -30,13 +31,14 @@ async function stop() {
   await exited;
   console.log(`Stopped owned DSH PID ${child.pid}`);
 }
-async function request(path, body) {
+async function request(path, body, status = 200) {
   const response = await fetch(origin + path, { signal: AbortSignal.timeout(15000),
-    ...(body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}) });
+    headers: { cookie, ...(body ? { 'content-type': 'application/json' } : {}) },
+    ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}) });
   const text = await response.text();
   assert.ok(text, `${path}: HTTP ${response.status} returned an empty body`);
   const value = JSON.parse(text);
-  assert.equal(response.status, 200, JSON.stringify(value));
+  assert.equal(response.status, status, JSON.stringify(value));
   return value;
 }
 const scout = body => request('/rollout-scout', body);
@@ -89,9 +91,22 @@ try {
   await writeFile(join(profile, 'package.json'), JSON.stringify({ name: 'rollout-scout-qa', private: true,
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-plugin-rollout-scout'] } } }));
   await copyFile(join(root, 'test/fixtures/dsh-acceptance.mjs'), join(profile, 'fixture.mjs'));
-  await writeFile(join(profile, 'cordis.patch.yml'), '- insert:\n    - id: offline-qa\n      name: ./fixture.mjs\n');
-  let retainedId, unownedId;
-  for (const phase of ['fresh', 'restart']) {
+  const fixturePatch = '- insert:\n    - id: offline-qa\n      name: ./fixture.mjs\n';
+  await writeFile(join(profile, 'cordis.patch.yml'), fixturePatch);
+  const phases = ['fresh', 'restart'];
+  if (existsSync(join(modules, '@deepseek-ai/dsh-session-persistence-sqlite/package.json'))) phases.push('sqlite');
+  let retainedId, unownedId, orphanId;
+  for (const phase of phases) {
+    if (phase === 'sqlite') {
+      await writeFile(join(profile, 'cordis.patch.yml'), fixturePatch + `- id: session-persistence-jsonl
+  disabled: true
+- insert:
+    - id: session-persistence-sqlite
+      name: '@deepseek-ai/dsh-session-persistence-sqlite'
+      config:
+        root: !!js dshHomePath('sessions')
+`);
+    }
     output = '';
     origin = undefined;
     server = spawn(process.execPath, ['--expose-internals', join(modules, '@deepseek-ai/dsh/lib/bin.js'),
@@ -103,13 +118,27 @@ try {
     server.stdout.on('data', chunk => { output += chunk; });
     server.stderr.on('data', chunk => { output += chunk; });
     const deadline = Date.now() + 180000;
-    while (!origin) {
-      origin = output.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
-      if (origin && output.includes('Scout QA offline adapter ready.')) break;
-      origin = undefined;
+    let entryUrl;
+    for (;;) {
+      entryUrl = output.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=\S+)\r?\n/)?.[1];
+      if (entryUrl && output.includes('Scout QA offline adapter ready.')) break;
       if (server.exitCode !== null || Date.now() > deadline) throw new Error(`DSH ${phase} startup failed`);
       await delay(100);
     }
+    origin = new URL(entryUrl).origin;
+    if (existsSync(join(modules, '@deepseek-ai/dsh-host-authentication-token/package.json'))) {
+      for (const path of ['/rollout-scout', '/qa/state']) {
+        const anonymous = await fetch(origin + path, { redirect: 'manual' });
+        assert.equal(anonymous.status, 401, `Anonymous ${path} must be refused`);
+      }
+      const anonymousAction = await fetch(origin + '/rollout-scout', { method: 'POST',
+        headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'pause' }) });
+      assert.equal(anonymousAction.status, 401);
+    }
+    const login = await fetch(entryUrl, { redirect: 'manual', signal: AbortSignal.timeout(15000) });
+    assert.equal(login.status, 303, 'DSH must accept the launch URL');
+    cookie = login.headers.getSetCookie().map(value => value.split(';', 1)[0]).join('; ');
+    assert.ok(cookie, 'DSH must issue a session cookie');
     console.log(`Official DSH ${runtime.version}: ${phase}; PID ${server.pid}; ${origin}; sandbox ${sandbox}`);
     if (phase === 'fresh') {
       const attempt = await keepProbe();
@@ -140,8 +169,7 @@ try {
       console.log('PASS: plain/signed streaming, prose-only preview, raw persistence, max effort, auto-pause, cold rename, protected cleanup, explicit deletion');
       if (process.env.DSH_QA_BROWSER_MODULE) {
         const { checkBrowser } = await import(pathToFileURL(resolve(process.env.DSH_QA_BROWSER_MODULE)));
-        await checkBrowser({ origin, entryUrl: output.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=[^\s]+)/)?.[1] || origin,
-          sandbox, runtime: runtime.version, retainedId });
+        await checkBrowser({ origin, entryUrl, sandbox, runtime: runtime.version, retainedId });
       }
       await scout({ action: 'force-stop' });
       await scout({ action: 'start', config: { ...config, prompt: 'qa-old' } });
@@ -166,7 +194,11 @@ try {
       assert.ok(qa.sessions.some(session => session.header.id === retainedId && session.onDisk), 'Negative cleanup preserves the retained catch');
       assert.ok(qa.sessions.some(session => session.header.id === unownedId && session.onDisk), 'Cleanup never infers ownership from folder or message source');
       console.log('PASS: live negative classification, model cancellation, owned cleanup, retained catch preservation');
-    } else {
+      await scout({ action: 'force-stop' });
+      const orphan = await keepProbe();
+      await scout({ action: 'unprotect', id: orphan.id });
+      orphanId = orphan.sessionId;
+    } else if (phase === 'restart') {
       let qa = await request('/qa/state');
       assert.ok(qa.sessions.some(session => session.header.id === retainedId && session.onDisk));
       await scout({ action: 'start', config: { ...config, prompt: 'qa-error' } });
@@ -183,8 +215,10 @@ try {
         assert.ok(qa.sessions.some(session => session.header.id === attempt.sessionId && session.onDisk),
           'Model failures must not enter automatic deletion');
       }
-      await scout({ action: 'delete-all' });
+      assert.ok(qa.sessions.some(session => session.header.id === orphanId && session.onDisk));
       await scout({ action: 'reap' });
+      assert.ok(!(await request('/qa/state')).sessions.some(session => session.header.id === orphanId));
+      await scout({ action: 'delete-all' });
       qa = await request('/qa/state');
       assert.ok(qa.sessions.some(session => session.header.id === retainedId && session.onDisk),
         'Restart orphan cleanup must preserve durable Keep');
@@ -194,6 +228,69 @@ try {
         assert.ok(!qa.sessions.some(session => session.header.id === attempt.sessionId));
       }
       console.log('PASS: restart retention, three-failure breaker, failed-probe preservation, orphan cleanup');
+    } else {
+      const refuse = async action => {
+        const refused = await request('/rollout-scout', { action }, 409);
+        assert.match(refused.error, /cleanup is unsupported/);
+        assert.ok(refused.state.attempts.every(attempt => !attempt.deleted
+          && !/unsupported|deletion/.test(attempt.error ?? '')), `${action} leaves every card ordinary`);
+      };
+      const card = (state, id) => state.attempts.find(attempt => attempt.id === id);
+      assert.equal((await scout()).cleanupSupported, false);
+      await scout({ action: 'start', config: { ...config, prompt: 'qa-error' } });
+      const state = await settled(state => state.note === 'launch-failed');
+      const ids = state.attempts.map(attempt => attempt.sessionId);
+      assert.equal(ids.length, 3);
+      const ledger = join(folder, '.rollout-scout.json');
+      const before = await readFile(ledger, 'utf8');
+      for (const action of ['delete-all', 'clear', 'reap']) await refuse(action);
+      assert.equal(await readFile(ledger, 'utf8'), before);
+
+      await scout({ action: 'force-stop' });
+      await scout({ action: 'start', config: { ...config, prompt: 'qa-old' } });
+      const deadline = Date.now() + 15000;
+      let old;
+      do {
+        old = (await scout()).attempts.find(attempt => attempt.verdict === 'old');
+        if (old) break;
+        await delay(25);
+      } while (Date.now() < deadline);
+      assert.ok(old, 'Live negative reasoning is classified under SQLite');
+      await scout({ action: 'pause' });
+      const discarded = card(await settled(state => card(state, old.id)?.status === 'discarded'), old.id);
+      assert.ok(!discarded.deleted && !/unsupported|deletion/.test(discarded.error ?? ''),
+        'Automatic deletion is not attempted for a discarded probe');
+      assert.equal(card(await scout({ action: 'protect', id: old.id }), old.id).protected, true,
+        'A discarded probe stays keepable');
+
+      await scout({ action: 'force-stop' });
+      await scout({ action: 'start', config: { ...config, prompt: 'qa-keep' } });
+      const caught = (await settled(state => state.attempts.some(attempt => attempt.verdict === 'rollout' && attempt.protected)))
+        .attempts.find(attempt => attempt.verdict === 'rollout');
+      await scout({ action: 'unprotect', id: caught.id });
+      await refuse('delete-all');
+      assert.equal(card(await scout({ action: 'protect', id: caught.id }), caught.id).protected, true,
+        'An un-kept catch stays keepable after a refused Delete all');
+      await scout({ action: 'rename', id: caught.id, title: 'QA SQLite catch' });
+
+      const qa = await request('/qa/state');
+      assert.deepEqual(qa.cancelled, ['qa-old'], 'Host cancellation still reaches the model under SQLite');
+      const owned = [...ids, caught.sessionId, old.sessionId];
+      for (const id of [...owned, retainedId, unownedId]) {
+        const session = qa.sessions.find(session => session.header.id === id);
+        assert.ok(session?.events.length, `SQLite history remains readable for ${id}`);
+        assert.equal(session.onDisk, undefined, 'The active provider has no JSONL locator');
+        if (owned.includes(id)) assert.equal(session.attached, true);
+      }
+      assert.ok(JSON.stringify(qa.sessions.find(session => session.header.id === caught.sessionId).events)
+        .includes('QA SQLite catch'), 'Rename persists under SQLite');
+      const ledgerAfter = JSON.parse(await readFile(ledger, 'utf8'));
+      assert.ok(owned.every(id => ledgerAfter.owned.includes(id)) && ledgerAfter.deleting.length === 0);
+      console.log('PASS: SQLite cleanup refusal keeps catches and discarded probes keepable, skips auto-delete, preserves ownership, membership and histories');
+      if (process.env.DSH_QA_BROWSER_MODULE) {
+        const { checkUnsupportedCleanup } = await import(pathToFileURL(resolve(process.env.DSH_QA_BROWSER_MODULE)));
+        await checkUnsupportedCleanup({ entryUrl, sandbox, runtime: runtime.version, title: 'QA SQLite catch' });
+      }
     }
     if (process.env.DSH_QA_LOG_DIR) {
       await writeFile(join(process.env.DSH_QA_LOG_DIR, `host-${runtime.version}-${phase}.log`), redact(output));

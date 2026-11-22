@@ -26,6 +26,8 @@ class LocalReply extends LlmAdapter {
     const message = options.messages.findLast(message => message.source.kind === 'dsh-plugin-rollout-scout');
     assert.ok(message, 'Only Scout probes may use the offline adapter');
     const prompt = message.content.find(block => block.type === 'text')?.text;
+    assert.equal(options.provider, 'qa-local');
+    assert.equal(options.model, 'qa-model');
     calls.push({ prompt, reasoningEffort: options.reasoningEffort, source: message.source });
     if (prompt === 'qa-error') throw new Error('Offline QA model failure');
     if (prompt === 'qa-old') {
@@ -46,7 +48,7 @@ class LocalReply extends LlmAdapter {
   }
 }
 
-export const inject = ['llm', 'sessions', 'agents', 'sessionQuery', 'sessionPersistence', 'webServer'];
+export const inject = ['llm', 'sessions', 'agents', 'sessionQuery', 'sessionPersistence', 'workspaceRegistry', 'webServer'];
 export function apply(ctx) {
   ctx.llm.registerAdapter(['qa-local'], new LocalReply());
   // Deterministic reproduction of the non-transactional list/observe boundary.
@@ -93,9 +95,10 @@ export function apply(ctx) {
         const header = record.header ?? record;
         const observation = await ctx.sessionQuery.observeSession(header.id, { projectionMode: 'none' });
         try {
-          const location = ctx.sessionPersistence.locate(header);
-          const onDisk = await access(location.path).then(() => true, () => false);
+          const location = ctx.sessionPersistence.locate?.(header);
+          const onDisk = location && await access(location.path).then(() => true, () => false);
           sessions.push({ header: observation.header, events: observation.events,
+            attached: ctx.workspaceRegistry.list().some(workspace => workspace.sessionIds.includes(header.id)),
             live: !!ctx.sessions.get(header.id), onDisk });
         } finally { observation[Symbol.dispose](); }
       }

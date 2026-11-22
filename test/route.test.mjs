@@ -26,6 +26,7 @@ const routes = [];
 apply({
   effect(fn) { routes.push(fn()); },
   webServer: { register(route) { routes.push(route); return route; } },
+  sessionPersistence: {},
 });
 const route = routes.find((r) => r && r.path === '/rollout-scout');
 if (route === undefined) {

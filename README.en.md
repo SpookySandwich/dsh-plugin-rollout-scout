@@ -5,7 +5,7 @@ English | [简体中文](README.md)
 [![npm](https://img.shields.io/npm/v/dsh-plugin-rollout-scout?color=cb3837&logo=npm)](https://www.npmjs.com/package/dsh-plugin-rollout-scout)
 [![CI](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml/badge.svg)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.5-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
+[![dsh](https://img.shields.io/badge/dsh-0.2.3--alpha.1-4b8dff)](https://github.com/deepseek-ai/deepseek-harness)
 [![stars](https://img.shields.io/github/stars/SpookySandwich/dsh-plugin-rollout-scout?style=flat&label=stars)](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/stargazers)
 
 Providers sometimes roll a new conversation model out gradually, so which one you get is luck of the draw. Rollout Scout opens throwaway conversations on your own account, reads each one's chain-of-thought **as it streams**, and scores how the reasoning is written — cancelling the ones that read like the model you already have, and keeping the ones that don't.
@@ -135,7 +135,9 @@ Implementation notes live in [`docs/`](docs/) — [architecture](docs/architectu
 
 ## Compatibility
 
-Next release: Support official dsh `0.2.2-rc.4` and `0.2.2-rc.5` with ordinary npm peer resolution and strict peer checking, while retaining all previously declared compatibility. Refusals, including `CONTENT_REFUSED` after partial reasoning, use Scout's existing error handling; no plugin settings changes are needed. The rc.5 change to the default web search provider does not affect Scout: probes join no agent preset, so they have no `web_search` tool and never search.
+Next release: Support official dsh `0.2.3-alpha.1` with ordinary npm peer resolution and strict peer checking, while retaining all previously declared compatibility. The console works over the release's signed-in Web and Desktop connections, and DSH refuses unauthenticated requests to `/rollout-scout`. With the opt-in SQLite session store, Scout still runs probes but cannot delete probe conversations, so it keeps every one: the console says so, deleting old-model probes, Clear finished, Delete all sessions and sweeping are switched off, and each probe can still be kept, renamed and opened. The default JSONL store is unaffected. On Windows Desktop the console now opens below the window's caption row instead of under its menu.
+
+Version `1.9.2`: Support official dsh `0.2.2-rc.4` and `0.2.2-rc.5` with ordinary npm peer resolution and strict peer checking, while retaining all previously declared compatibility. Refusals, including `CONTENT_REFUSED` after partial reasoning, use Scout's existing error handling; no plugin settings changes are needed. The rc.5 change to the default web search provider does not affect Scout: probes join no agent preset, so they have no `web_search` tool and never search.
 
 Version `1.9.1`: Support official dsh `0.2.2-rc.3` (while retaining `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, and `0.2.2-rc.1` compatibility). Imported conversations created via `@deepseek-ai/dsh-deepseek-chat-import` in a Scout workspace remain untouched by probe ownership and cleanup.
 
@@ -149,11 +151,11 @@ Version `1.6.0`: Load on official dsh `0.2.0-rc.2`. Probe cleanup still uses `se
 
 Version `1.5.0`: Consume transient agent/assistant-stream frames on DSH 0.1.5, retain the legacy feed without duplicate counting, and unwrap persistence snapshot headers for cleanup.
 
-The declared host range is `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4 || 0.2.2-rc.5`; official dsh `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, `0.2.2-rc.1`, `0.2.2-rc.3`, `0.2.2-rc.4`, and `0.2.2-rc.5` satisfy it. Keep the previous plugin release on older DSH. [Validation records](.github/reviews/dsh-0.2.2-rc.1.md) and [round 2](.github/reviews/dsh-0.2.2-rc.1-round2.md).
+The declared host range is `>=0.2.0-rc.2 <0.3.0-0 || 0.2.1-rc.2 || 0.2.1-rc.5 || 0.2.2-rc.1 || 0.2.2-rc.3 || 0.2.2-rc.4 || 0.2.2-rc.5 || 0.2.3-alpha.1`; official dsh `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.1-rc.5`, `0.2.2-rc.1`, `0.2.2-rc.3`, `0.2.2-rc.4`, `0.2.2-rc.5`, and `0.2.3-alpha.1` satisfy it. Keep the previous plugin release on older DSH. [Validation records](.github/reviews/dsh-0.2.2-rc.1.md) and [round 2](.github/reviews/dsh-0.2.2-rc.1-round2.md).
 
-Download the archive from the [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.9.1), then run `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.9.1.tgz`. The rc.4 and rc.5 compatibility update ships in the next plugin release; until then, use the repository installation above on rc.4 or rc.5.
+Download the archive from the [GitHub Release](https://github.com/SpookySandwich/dsh-plugin-rollout-scout/releases/tag/v1.9.2), then run `dsh plugin --profile desktop add ./dsh-plugin-rollout-scout-1.9.2.tgz`. The 0.2.3-alpha.1 compatibility update ships in the next plugin release; until then, use the repository installation above on 0.2.3-alpha.1.
 
-This update targets DSH `0.2.2-rc.5`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
+This update targets DSH `0.2.3-alpha.1`. Run `npm ci`, `npm test`, and `npm run check:package` to verify the build and package. Restart DSH after updating.
 
 
 The launcher takes a `sidebar.footer.action` seat (a list slot, so it sits beside any other footer action rather than displacing one) and the console renders on the frame-wide `shell.overlay` layer. Neither is per-session, so it conflicts with no session plugin. Requires a DSH whose sidebar declares that seat; without it the console has no way in. Part of the same family as [dsh-plugin-smooth-stream](https://github.com/SpookySandwich/dsh-plugin-smooth-stream), [dsh-plugin-no-workspace](https://github.com/SpookySandwich/dsh-plugin-no-workspace) and [dsh-plugin-message-edit](https://github.com/SpookySandwich/dsh-plugin-message-edit).

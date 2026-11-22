@@ -27,6 +27,11 @@ check(
   built.includes(safeRight),
   'generated client ships the title-bar-safe header inset',
 );
+const chromeTop = 'position:fixed;inset:var(--dsh-frame-chrome-top,0px) 0 0;';
+check(
+  [source, built].every((text) => text.includes(`.rsc-full{${chromeTop}`) && text.includes(`.rsc-scrim{${chromeTop}`)),
+  'console and preflight scrim start below the Windows Desktop caption row',
+);
 check(
   !source.includes('.rsc-top{display:flex;align-items:center;gap:14px;padding:16px 22px;'),
   'the unsafe fixed right inset cannot return unnoticed',

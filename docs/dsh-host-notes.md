@@ -1,5 +1,25 @@
 # DSH host behaviour this plugin relies on
 
+## DSH 0.2.3-alpha.1 update (2026-11-21)
+
+WebServer routes now default to `auth: 'required'`. The browser's same-origin
+fetch carries the launch-token Cookie and Desktop forwards its private
+credential, so `/rollout-scout` needs no change. Anonymous callers receive 401
+before the handler runs, and the acceptance runner signs in through the launch
+URL.
+
+The JSONL provider's `locate` is now TypeScript-private but still present at
+runtime. The opt-in SQLite provider has no locator and no deletion operation.
+Scout reads this once when it loads. Automatic deletion is then never
+scheduled, and Clear, Delete all and sweep refuse before any card is gated, so
+probes stay keepable and ordinary history trimming still applies. The manifest
+transaction repeats the check before an id enters `deleting`.
+
+Windows Desktop reserves `--dsh-windows-titlebar-height` for its caption menu,
+and the frame publishes `--dsh-frame-chrome-top` (zero in fullscreen and in
+plain browsers). DSH's own full-frame layers start at that inset, and so do
+the console and preflight scrim.
+
 ## DSH 0.1.5-rc.2 update (2026-09-20)
 
 Streaming chunks are now process-local `agent/assistant-stream` frames, not
